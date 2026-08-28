@@ -1,982 +1,1414 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="it">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Symphony of Decay: Planck Edition</title>
-    <style>
-        :root {
-            --bg-color: #05050a;
-            --text-color: #eee;
-            --ui-bg: rgba(10, 10, 20, 0.85);
-            --toolbox-bg: rgba(15, 15, 25, 0.95);
-            --border-color: #444;
-            --primary-border: #ff0055;
-            --btn-bg: #222;
-            --btn-hover: #444;
-            --sub-btn-bg: #2a2a3d;
-            --wall-color: #1a1a2e;
-        }
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        <title>Symphony of Decay: Planck Edition</title>
+        <style>
+            :root {
+                --bg-color: #05050a;
+                --text-color: #eee;
+                --ui-bg: rgba(10, 10, 20, 0.85);
+                --toolbox-bg: rgba(15, 15, 25, 0.95);
+                --border-color: #444;
+                --primary-border: #ff0055;
+                --btn-bg: #222;
+                --btn-hover: #444;
+                --sub-btn-bg: #2a2a3d;
+                --wall-color: #1a1a2e;
+            }
 
-        body.light-theme {
-            --bg-color: #f0f2f5;
-            --text-color: #222;
-            --ui-bg: rgba(255, 255, 255, 0.9);
-            --toolbox-bg: rgba(240, 242, 245, 0.95);
-            --border-color: #ccc;
-            --primary-border: #ff0055;
-            --btn-bg: #e4e6eb;
-            --btn-hover: #d8dadf;
-            --sub-btn-bg: #d0d3d9;
-            --wall-color: #d1d5db;
-        }
+            body.light-theme {
+                --bg-color: #f0f2f5;
+                --text-color: #222;
+                --ui-bg: rgba(255, 255, 255, 0.9);
+                --toolbox-bg: rgba(240, 242, 245, 0.95);
+                --border-color: #ccc;
+                --primary-border: #ff0055;
+                --btn-bg: #e4e6eb;
+                --btn-hover: #d8dadf;
+                --sub-btn-bg: #d0d3d9;
+                --wall-color: #d1d5db;
+            }
 
-        body {
-            margin: 0; padding: 0; background: var(--bg-color);
-            color: var(--text-color); font-family: 'Courier New', Courier, monospace;
-            overflow: hidden; display: flex; flex-direction: column;
-            align-items: center; justify-content: center; height: 100vh;
-            touch-action: none;
-            transition: background 0.3s, color 0.3s;
-        }
-        #game-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-        
-        #ui {
-            position: absolute; top: 10px; left: 10px;
-            background: var(--ui-bg); padding: 10px 12px;
-            border-radius: 10px; border: 1px solid var(--primary-border);
-            pointer-events: none; backdrop-filter: blur(8px);
-            max-width: 240px;
-            box-shadow: 0 0 20px rgba(255, 0, 85, 0.2);
-            z-index: 10;
-        }
-        h1 { margin: 0 0 4px 0; font-size: 14px; color: #ff0055; text-transform: uppercase; letter-spacing: 1px;}
-        p { margin: 0 0 6px 0; font-size: 10px; line-height: 1.2; color: var(--text-color); opacity: 0.8;}
-        #score-box { margin-top: 4px; font-weight: bold; color: var(--text-color); font-size: 12px; }
+            body {
+                margin: 0;
+                padding: 0;
+                background: var(--bg-color);
+                color: var(--text-color);
+                font-family: "Courier New", Courier, monospace;
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                height: 100vh;
+                touch-action: none;
+                transition:
+                    background 0.3s,
+                    color 0.3s;
+            }
+            #game-canvas {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+            }
 
-        /* Floating Menu Toggle for Mobile */
-        #toolbox-toggle {
-            display: none;
-            position: absolute; top: 10px; right: 10px;
-            background: var(--ui-bg); color: var(--text-color);
-            border: 1px solid var(--primary-border); padding: 10px 14px;
-            border-radius: 10px; font-family: inherit; font-weight: bold; font-size: 12px;
-            cursor: pointer; z-index: 20; backdrop-filter: blur(8px);
-        }
-
-        #toolbox {
-            position: absolute; top: 10px; right: 10px;
-            background: var(--toolbox-bg); padding: 10px;
-            border-radius: 12px; border: 1px solid var(--border-color);
-            display: flex; flex-direction: column; gap: 6px;
-            backdrop-filter: blur(8px); z-index: 15;
-            width: 260px; max-height: calc(100vh - 80px); overflow-y: auto;
-            transition: transform 0.3s ease, opacity 0.3s ease;
-        }
-
-        .tool-group { display: flex; flex-direction: column; gap: 4px; }
-        .tool-group label { font-size: 10px; color: var(--text-color); opacity: 0.7; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; }
-        
-        .block-selector {
-            display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
-        }
-        .block-btn {
-            background: var(--btn-bg); border: 2px solid var(--border-color); color: var(--text-color);
-            padding: 6px 2px; font-size: 9px; font-family: inherit;
-            cursor: pointer; border-radius: 5px; text-align: center; transition: 0.2s;
-        }
-        .block-btn.active { border-color: #ff0055; background: #331122; font-weight: bold; color: #fff; }
-        .block-btn#btn-bass { border-left: 3px solid #ff6b81; }
-        .block-btn#btn-wood { border-left: 3px solid #e67e22; }
-        .block-btn#btn-mid { border-left: 3px solid #70a1ff; }
-        .block-btn#btn-rubber { border-left: 3px solid #ffa502; }
-        .block-btn#btn-high { border-left: 3px solid #2ed573; }
-        .block-btn#btn-neon { border-left: 3px solid #ff00ff; }
-        .block-btn#btn-poleH, .block-btn#btn-poleV { border-left: 3px solid #a4b0be; }
-
-        .special-tools {
-            display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; margin-top: 2px;
-        }
-        .special-btn {
-            background: var(--btn-bg); border: 2px solid var(--border-color); color: var(--text-color);
-            padding: 8px 4px; font-size: 9px; font-family: inherit;
-            cursor: pointer; border-radius: 6px; text-align: center; transition: 0.2s;
-            font-weight: bold;
-        }
-        .special-btn.active { border-color: #ffa502; background: #443311; color: #ffa502; }
-        .special-btn#btn-eraser.active { border-color: #ff4757; background: #441111; color: #ff4757; }
-
-        input[type=range] {
-            width: 100%; accent-color: #ff0055; cursor: pointer; height: 4px;
-        }
-        .slider-val { color: #ff0055; }
-        .mixer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-        .mixer-item { background: rgba(128,128,128,0.1); padding: 4px 8px; border-radius: 4px; }
-
-        .sub-btn {
-            background: var(--sub-btn-bg); border: 1px solid var(--border-color); color: var(--text-color);
-            font-size: 9px; padding: 4px 8px; border-radius: 4px; cursor: pointer;
-            font-family: inherit; transition: 0.2s;
-        }
-        .sub-btn:hover { opacity: 0.8; }
-
-        #controls {
-            position: absolute; bottom: 15px; display: flex; gap: 8px;
-            pointer-events: auto; background: var(--ui-bg); padding: 8px 12px; border-radius: 10px;
-            border: 1px solid var(--border-color); backdrop-filter: blur(5px); z-index: 10;
-        }
-        button.action-btn {
-            background: var(--btn-bg); color: var(--text-color); border: 1px solid var(--border-color); padding: 8px 12px;
-            font-family: inherit; cursor: pointer; transition: 0.2s; border-radius: 6px; font-weight: bold; font-size: 10px;
-        }
-        button.action-btn:hover { background: var(--btn-hover); border-color: #888; }
-        button.primary { background: #ff0055; color: #fff; border-color: #ff0055; box-shadow: 0 0 10px rgba(255,0,85,0.4); }
-        button.primary:hover { background: #ff3366; }
-
-        /* Responsive Mobile Styles */
-        @media (max-width: 768px) {
-            #toolbox-toggle { display: block; }
-            #toolbox.collapsed {
-                transform: translateX(110%);
-                opacity: 0;
+            #ui {
+                position: absolute;
+                top: 10px;
+                left: 10px;
+                background: var(--ui-bg);
+                padding: 10px 12px;
+                border-radius: 10px;
+                border: 1px solid var(--primary-border);
                 pointer-events: none;
+                backdrop-filter: blur(8px);
+                max-width: 240px;
+                box-shadow: 0 0 20px rgba(255, 0, 85, 0.2);
+                z-index: 10;
             }
+            h1 {
+                margin: 0 0 4px 0;
+                font-size: 14px;
+                color: #ff0055;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+            p {
+                margin: 0 0 6px 0;
+                font-size: 10px;
+                line-height: 1.2;
+                color: var(--text-color);
+                opacity: 0.8;
+            }
+            #score-box {
+                margin-top: 4px;
+                font-weight: bold;
+                color: var(--text-color);
+                font-size: 12px;
+            }
+
+            /* Floating Menu Toggle for Mobile */
+            #toolbox-toggle {
+                display: none;
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                background: var(--ui-bg);
+                color: var(--text-color);
+                border: 1px solid var(--primary-border);
+                padding: 10px 14px;
+                border-radius: 10px;
+                font-family: inherit;
+                font-weight: bold;
+                font-size: 12px;
+                cursor: pointer;
+                z-index: 20;
+                backdrop-filter: blur(8px);
+            }
+
             #toolbox {
-                top: 55px; right: 10px; width: calc(100vw - 40px); max-width: 320px;
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                background: var(--toolbox-bg);
+                padding: 10px;
+                border-radius: 12px;
+                border: 1px solid var(--border-color);
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+                backdrop-filter: blur(8px);
+                z-index: 15;
+                width: 260px;
+                max-height: calc(100vh - 80px);
+                overflow-y: auto;
+                transition:
+                    transform 0.3s ease,
+                    opacity 0.3s ease;
             }
-            #ui { max-width: 180px; padding: 8px; }
-            h1 { font-size: 12px; }
-            p { font-size: 9px; }
-            #controls { bottom: 10px; padding: 6px; gap: 6px; }
-            button.action-btn { padding: 6px 10px; font-size: 9px; }
-        }
-    </style>
-</head>
-<body>
 
-    <canvas id="game-canvas"></canvas>
+            .tool-group {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+            }
+            .tool-group label {
+                font-size: 10px;
+                color: var(--text-color);
+                opacity: 0.7;
+                text-transform: uppercase;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
 
-    <button id="toolbox-toggle" onclick="toggleToolbox()">⚙️ Menu</button>
+            .block-selector {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 4px;
+            }
+            .block-btn {
+                background: var(--btn-bg);
+                border: 2px solid var(--border-color);
+                color: var(--text-color);
+                padding: 6px 2px;
+                font-size: 9px;
+                font-family: inherit;
+                cursor: pointer;
+                border-radius: 5px;
+                text-align: center;
+                transition: 0.2s;
+            }
+            .block-btn.active {
+                border-color: #ff0055;
+                background: #331122;
+                font-weight: bold;
+                color: #fff;
+            }
+            .block-btn#btn-bass {
+                border-left: 3px solid #ff6b81;
+            }
+            .block-btn#btn-wood {
+                border-left: 3px solid #e67e22;
+            }
+            .block-btn#btn-mid {
+                border-left: 3px solid #70a1ff;
+            }
+            .block-btn#btn-rubber {
+                border-left: 3px solid #ffa502;
+            }
+            .block-btn#btn-high {
+                border-left: 3px solid #2ed573;
+            }
+            .block-btn#btn-neon {
+                border-left: 3px solid #ff00ff;
+            }
+            .block-btn#btn-poleH,
+            .block-btn#btn-poleV {
+                border-left: 3px solid #a4b0be;
+            }
 
-    <div id="ui">
-        <h1>Symphony of Decay</h1>
-        <p id="instruction-mode">Trascina per muovere. Clicca a vuoto per spawnare.</p>
-        <div id="score-box">Armonia: <span id="score" style="color: #2ed573;">0</span></div>
-    </div>
+            .special-tools {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 4px;
+                margin-top: 2px;
+            }
+            .special-btn {
+                background: var(--btn-bg);
+                border: 2px solid var(--border-color);
+                color: var(--text-color);
+                padding: 8px 4px;
+                font-size: 9px;
+                font-family: inherit;
+                cursor: pointer;
+                border-radius: 6px;
+                text-align: center;
+                transition: 0.2s;
+                font-weight: bold;
+            }
+            .special-btn.active {
+                border-color: #ffa502;
+                background: #443311;
+                color: #ffa502;
+            }
+            .special-btn#btn-eraser.active {
+                border-color: #ff4757;
+                background: #441111;
+                color: #ff4757;
+            }
 
-    <div id="toolbox" class="collapsed">
-        <div class="tool-group">
-            <label>Seleziona Oggetto: <button class="sub-btn" id="theme-toggle" onclick="toggleTheme()">🌓 Tema</button></label>
-            <div class="block-selector">
-                <button class="block-btn active" id="btn-bass" onclick="selectBlock('bass')">Cemento</button>
-                <button class="block-btn" id="btn-wood" onclick="selectBlock('wood')">Legno</button>
-                <button class="block-btn" id="btn-mid" onclick="selectBlock('mid')">Acciaio</button>
-                <button class="block-btn" id="btn-rubber" onclick="selectBlock('rubber')">Gomma</button>
-                <button class="block-btn" id="btn-high" onclick="selectBlock('high')">Cristallo</button>
-                <button class="block-btn" id="btn-neon" onclick="selectBlock('neon')">Neon</button>
-                <button class="block-btn" id="btn-poleH" onclick="selectBlock('poleH')">Palo Oriz.</button>
-                <button class="block-btn" id="btn-poleV" onclick="selectBlock('poleV')">Palo Vert.</button>
+            input[type="range"] {
+                width: 100%;
+                accent-color: #ff0055;
+                cursor: pointer;
+                height: 4px;
+            }
+            .slider-val {
+                color: #ff0055;
+            }
+            .mixer-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 6px;
+            }
+            .mixer-item {
+                background: rgba(128, 128, 128, 0.1);
+                padding: 4px 8px;
+                border-radius: 4px;
+            }
+
+            .sub-btn {
+                background: var(--sub-btn-bg);
+                border: 1px solid var(--border-color);
+                color: var(--text-color);
+                font-size: 9px;
+                padding: 4px 8px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-family: inherit;
+                transition: 0.2s;
+            }
+            .sub-btn:hover {
+                opacity: 0.8;
+            }
+
+            #controls {
+                position: absolute;
+                bottom: 15px;
+                display: flex;
+                gap: 8px;
+                pointer-events: auto;
+                background: var(--ui-bg);
+                padding: 8px 12px;
+                border-radius: 10px;
+                border: 1px solid var(--border-color);
+                backdrop-filter: blur(5px);
+                z-index: 10;
+            }
+            button.action-btn {
+                background: var(--btn-bg);
+                color: var(--text-color);
+                border: 1px solid var(--border-color);
+                padding: 8px 12px;
+                font-family: inherit;
+                cursor: pointer;
+                transition: 0.2s;
+                border-radius: 6px;
+                font-weight: bold;
+                font-size: 10px;
+            }
+            button.action-btn:hover {
+                background: var(--btn-hover);
+                border-color: #888;
+            }
+            button.primary {
+                background: #ff0055;
+                color: #fff;
+                border-color: #ff0055;
+                box-shadow: 0 0 10px rgba(255, 0, 85, 0.4);
+            }
+            button.primary:hover {
+                background: #ff3366;
+            }
+
+            /* Responsive Mobile Styles */
+            @media (max-width: 768px) {
+                #toolbox-toggle {
+                    display: block;
+                }
+                #toolbox.collapsed {
+                    transform: translateX(110%);
+                    opacity: 0;
+                    pointer-events: none;
+                }
+                #toolbox {
+                    top: 55px;
+                    right: 10px;
+                    width: calc(100vw - 40px);
+                    max-width: 320px;
+                }
+                #ui {
+                    max-width: 180px;
+                    padding: 8px;
+                }
+                h1 {
+                    font-size: 12px;
+                }
+                p {
+                    font-size: 9px;
+                }
+                #controls {
+                    bottom: 10px;
+                    padding: 6px;
+                    gap: 6px;
+                }
+                button.action-btn {
+                    padding: 6px 10px;
+                    font-size: 9px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <canvas id="game-canvas"></canvas>
+
+        <button id="toolbox-toggle" onclick="toggleToolbox(event)">⚙️ Menu</button>
+
+        <div id="ui">
+            <h1>Symphony of Decay</h1>
+            <p id="instruction-mode">Trascina per muovere. Clicca a vuoto per spawnare.</p>
+            <div id="score-box">Armonia: <span id="score" style="color: #2ed573">0</span></div>
+        </div>
+
+        <div id="toolbox" class="collapsed">
+            <div class="tool-group">
+                <label
+                    >Seleziona Oggetto:
+                    <button class="sub-btn" id="theme-toggle" onclick="toggleTheme()">🌓 Tema</button></label
+                >
+                <div class="block-selector">
+                    <button class="block-btn active" id="btn-bass" onclick="selectBlock('bass')">Orolite</button>
+                    <button class="block-btn" id="btn-wood" onclick="selectBlock('wood')">Pentacore</button>
+                    <button class="block-btn" id="btn-mid" onclick="selectBlock('mid')">Hexarun</button>
+                    <button class="block-btn" id="btn-rubber" onclick="selectBlock('rubber')">Septifor</button>
+                    <button class="block-btn" id="btn-high" onclick="selectBlock('high')">Octavox</button>
+                    <button class="block-btn" id="btn-neon" onclick="selectBlock('neon')">Astral</button>
+                    <button class="block-btn" id="btn-poleH" onclick="selectBlock('poleH')">Palo Oriz.</button>
+                    <button class="block-btn" id="btn-poleV" onclick="selectBlock('poleV')">Palo Vert.</button>
+                </div>
+            </div>
+
+            <div class="tool-group">
+                <label>Strumenti Interattivi:</label>
+                <div class="special-tools">
+                    <button class="special-btn" id="btn-rope" onclick="setMode('rope')">🧵 Corda</button>
+                    <button class="special-btn" id="btn-chain" onclick="setMode('chain')">⛓️ Catena Rigida</button>
+                    <button class="special-btn" id="btn-bar" onclick="setMode('bar')">🔗 Barra</button>
+                    <button class="special-btn" id="btn-eraser" onclick="setMode('eraser')">🧹 Gomma</button>
+                </div>
+            </div>
+
+            <div class="tool-group" style="background: rgba(255, 0, 85, 0.05); padding: 4px; border-radius: 6px">
+                <label>Corda/Catena - Segmenti: <span id="val-rope-seg" class="slider-val">12</span></label>
+                <input
+                    type="range"
+                    id="slider-rope-seg"
+                    min="3"
+                    max="30"
+                    step="1"
+                    value="12"
+                    oninput="updateRopeProps()" />
+                <label style="margin-top: 4px"
+                    >Corda/Catena - Rigidità: <span id="val-rope-stiff" class="slider-val">1.0</span></label
+                >
+                <input
+                    type="range"
+                    id="slider-rope-stiff"
+                    min="0.1"
+                    max="1.0"
+                    step="0.05"
+                    value="1.0"
+                    oninput="updateRopeProps()" />
+            </div>
+
+            <div class="tool-group">
+                <label>Fisica - Gravità Y: <span id="val-gravity" class="slider-val">20.0</span></label>
+                <input
+                    type="range"
+                    id="slider-gravity"
+                    min="0"
+                    max="40"
+                    step="0.5"
+                    value="20.0"
+                    oninput="updatePhysics()" />
+            </div>
+
+            <div class="tool-group">
+                <label>Fisica - Attrito Aria: <span id="val-drag" class="slider-val">0.001</span></label>
+                <input
+                    type="range"
+                    id="slider-drag"
+                    min="0"
+                    max="0.02"
+                    step="0.001"
+                    value="0.001"
+                    oninput="updatePhysics()" />
+            </div>
+
+            <div class="tool-group">
+                <label>Vento - Velocità: <span id="val-wind" class="slider-val">0.0</span></label>
+                <input
+                    type="range"
+                    id="slider-wind"
+                    min="-5.0"
+                    max="5.0"
+                    step="0.2"
+                    value="0.0"
+                    oninput="updatePhysics()" />
+            </div>
+
+            <div class="tool-group">
+                <label>Vento - Irregolarità: <span id="val-turbulence" class="slider-val">0.0</span></label>
+                <input
+                    type="range"
+                    id="slider-turbulence"
+                    min="0"
+                    max="4.0"
+                    step="0.2"
+                    value="0.0"
+                    oninput="updatePhysics()" />
+            </div>
+
+            <button class="sub-btn" onclick="resetPhysics()">↩️ Reset Fisica</button>
+
+            <div class="tool-group" style="margin-top: 4px">
+                <label>Mixer Volumi: <button class="sub-btn" onclick="resetMixer()">Reset</button></label>
+                <div class="mixer-item" style="margin-bottom: 6px">
+                    <label>Master Generale</label
+                    ><input
+                        type="range"
+                        id="vol-master"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value="0.8"
+                        oninput="updateMasterVolume(this.value)" />
+                </div>
+                <div class="mixer-grid">
+                    <div class="mixer-item">
+                        <label>Orolite</label
+                        ><input
+                            type="range"
+                            id="vol-bass"
+                            min="0"
+                            max="1"
+                            step="0.1"
+                            value="0.8"
+                            oninput="updateVolume('bass', this.value)" />
+                    </div>
+                    <div class="mixer-item">
+                        <label>Pentacore</label
+                        ><input
+                            type="range"
+                            id="vol-wood"
+                            min="0"
+                            max="1"
+                            step="0.1"
+                            value="0.8"
+                            oninput="updateVolume('wood', this.value)" />
+                    </div>
+                    <div class="mixer-item">
+                        <label>Hexarun</label
+                        ><input
+                            type="range"
+                            id="vol-mid"
+                            min="0"
+                            max="1"
+                            step="0.1"
+                            value="0.8"
+                            oninput="updateVolume('mid', this.value)" />
+                    </div>
+                    <div class="mixer-item">
+                        <label>Septifor</label
+                        ><input
+                            type="range"
+                            id="vol-rubber"
+                            min="0"
+                            max="1"
+                            step="0.1"
+                            value="0.8"
+                            oninput="updateVolume('rubber', this.value)" />
+                    </div>
+                    <div class="mixer-item">
+                        <label>Octavox</label
+                        ><input
+                            type="range"
+                            id="vol-high"
+                            min="0"
+                            max="1"
+                            step="0.1"
+                            value="0.8"
+                            oninput="updateVolume('high', this.value)" />
+                    </div>
+                    <div class="mixer-item">
+                        <label>Astral</label
+                        ><input
+                            type="range"
+                            id="vol-neon"
+                            min="0"
+                            max="1"
+                            step="0.1"
+                            value="0.8"
+                            oninput="updateVolume('neon', this.value)" />
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="tool-group">
-            <label>Strumenti Interattivi:</label>
-            <div class="special-tools">
-                <button class="special-btn" id="btn-rope" onclick="setMode('rope')">🧵 Corda</button>
-                <button class="special-btn" id="btn-chain" onclick="setMode('chain')">⛓️ Catena Rigida</button>
-                <button class="special-btn" id="btn-bar" onclick="setMode('bar')">🔗 Barra</button>
-                <button class="special-btn" id="btn-eraser" onclick="setMode('eraser')">🧹 Gomma</button>
-            </div>
+        <div id="controls">
+            <button class="action-btn" onclick="clearScene()">🧹 Pulisci</button>
+            <button class="action-btn" id="btn-pause-play" onclick="togglePause()">⏸️ Pausa</button>
+            <button class="action-btn primary" onclick="triggerDecay()">⚡ GLITCH</button>
         </div>
 
-        <div class="tool-group" style="background: rgba(255,0,85,0.05); padding: 4px; border-radius: 6px;">
-            <label>Corda/Catena - Segmenti: <span id="val-rope-seg" class="slider-val">12</span></label>
-            <input type="range" id="slider-rope-seg" min="3" max="30" step="1" value="12" oninput="updateRopeProps()">
-            <label style="margin-top: 4px;">Corda/Catena - Rigidità: <span id="val-rope-stiff" class="slider-val">1.0</span></label>
-            <input type="range" id="slider-rope-stiff" min="0.1" max="1.0" step="0.05" value="1.0" oninput="updateRopeProps()">
-        </div>
+        <script src="https://cdn.jsdelivr.net/npm/planck-js/dist/planck.min.js"></script>
 
-        <div class="tool-group">
-            <label>Fisica - Gravità Y: <span id="val-gravity" class="slider-val">20.0</span></label>
-            <input type="range" id="slider-gravity" min="0" max="40" step="0.5" value="20.0" oninput="updatePhysics()">
-        </div>
+        <script>
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-        <div class="tool-group">
-            <label>Fisica - Attrito Aria: <span id="val-drag" class="slider-val">0.001</span></label>
-            <input type="range" id="slider-drag" min="0" max="0.02" step="0.001" value="0.001" oninput="updatePhysics()">
-        </div>
+            // Costanti armoniche basate su Pi Greco e Rapporto Aureo (Phi)
+            const PI = Math.PI;
+            const PHI = (1 + Math.sqrt(5)) / 2; // ~1.61803398875
 
-        <div class="tool-group">
-            <label>Vento - Velocità: <span id="val-wind" class="slider-val">0.0</span></label>
-            <input type="range" id="slider-wind" min="-5.0" max="5.0" step="0.2" value="0.0" oninput="updatePhysics()">
-        </div>
+            // Scale calcolate con proporzioni auree e circolarità armonica (più dolci e rilassanti)
+            const baseRoot = 110.0; // La2 come fondazione chill
+            const scales = {
+                bass: [baseRoot, baseRoot * 1.5, baseRoot * 2], // fondamentale, quinta, ottava
+                wood: [baseRoot * 1.25, baseRoot * 1.5, baseRoot * 2], // terza maggiore, quinta, ottava
+                mid: [baseRoot * 2, baseRoot * 2.5, baseRoot * 3, baseRoot * 4],
+                rubber: [baseRoot * 3, baseRoot * 3.75, baseRoot * 4.5],
+                high: [baseRoot * 4, baseRoot * 5, baseRoot * 6, baseRoot * 8],
+                neon: [baseRoot * 5, baseRoot * 6, baseRoot * 7.5, baseRoot * 10],
+                pole: [baseRoot * 1.5, baseRoot * 2.5]
+            };
 
-        <div class="tool-group">
-            <label>Vento - Irregolarità: <span id="val-turbulence" class="slider-val">0.0</span></label>
-            <input type="range" id="slider-turbulence" min="0" max="4.0" step="0.2" value="0.0" oninput="updatePhysics()">
-        </div>
-        
-        <button class="sub-btn" onclick="resetPhysics()">↩️ Reset Fisica</button>
+            const volumes = { bass: 0.8, wood: 0.8, mid: 0.8, rubber: 0.8, high: 0.8, neon: 0.8, pole: 0.8 };
+            let masterVolume = 0.8;
 
-        <div class="tool-group" style="margin-top: 4px;">
-            <label>Mixer Volumi: <button class="sub-btn" onclick="resetMixer()">Reset</button></label>
-            <div class="mixer-item" style="margin-bottom: 6px;"><label>Master Generale</label><input type="range" id="vol-master" min="0" max="1" step="0.05" value="1.0" oninput="updateMasterVolume(this.value)"></div>
-            <div class="mixer-grid">
-                <div class="mixer-item"><label>Cemento</label><input type="range" id="vol-bass" min="0" max="1" step="0.1" value="1.0" oninput="updateVolume('bass', this.value)"></div>
-                <div class="mixer-item"><label>Legno</label><input type="range" id="vol-wood" min="0" max="1" step="0.1" value="1.0" oninput="updateVolume('wood', this.value)"></div>
-                <div class="mixer-item"><label>Acciaio</label><input type="range" id="vol-mid" min="0" max="1" step="0.1" value="1.0" oninput="updateVolume('mid', this.value)"></div>
-                <div class="mixer-item"><label>Gomma</label><input type="range" id="vol-rubber" min="0" max="1" step="0.1" value="1.0" oninput="updateVolume('rubber', this.value)"></div>
-                <div class="mixer-item"><label>Cristallo</label><input type="range" id="vol-high" min="0" max="1" step="0.1" value="1.0" oninput="updateVolume('high', this.value)"></div>
-                <div class="mixer-item"><label>Neon</label><input type="range" id="vol-neon" min="0" max="1" step="0.1" value="1.0" oninput="updateVolume('neon', this.value)"></div>
-            </div>
-        </div>
-    </div>
-
-    <div id="controls">
-        <button class="action-btn" onclick="clearScene()">🧹 Pulisci</button>
-        <button class="action-btn" id="btn-pause-play" onclick="togglePause()">⏸️ Pausa</button>
-        <button class="action-btn primary" onclick="triggerDecay()">⚡ GLITCH</button>
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/planck-js/dist/planck.min.js"></script>
-
-    <script>
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-        const scales = {
-            bass: [110.00, 130.81, 146.83], 
-            wood: [164.81, 196.00, 220.00],
-            mid: [220.00, 261.63, 293.66, 329.63], 
-            rubber: [329.63, 392.00, 440.00],
-            high: [440.00, 523.25, 587.33, 659.25, 783.99],
-            neon: [523.25, 659.25, 783.99, 1046.50],
-            pole: [196.00, 246.94]
-        };
-
-        const volumes = { bass: 1.0, wood: 1.0, mid: 1.0, rubber: 1.0, high: 1.0, neon: 1.0, pole: 1.0 };
-        let masterVolume = 1.0;
-
-        function updateVolume(type, val) { volumes[type] = parseFloat(val); }
-        function updateMasterVolume(val) { masterVolume = parseFloat(val); }
-        function resetMixer() {
-            masterVolume = 1.0;
-            document.getElementById('vol-master').value = 1.0;
-            for (let key in volumes) {
-                volumes[key] = 1.0;
-                const slider = document.getElementById('vol-' + key);
-                if (slider) slider.value = 1.0;
+            function updateVolume(type, val) {
+                volumes[type] = parseFloat(val);
             }
-        }
-
-        let activeSoundsCount = 0;
-        const MAX_SIMULTANEOUS_SOUNDS = 8;
-
-        function playMixedSound(typeA, typeB, velocity) {
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-            if (activeSoundsCount >= MAX_SIMULTANEOUS_SOUNDS) return;
-            activeSoundsCount++;
-
-            const now = audioCtx.currentTime;
-            const primaryType = typeA;
-            const secondaryType = typeB && typeB !== typeA ? typeB : null;
-
-            const osc1 = audioCtx.createOscillator();
-            const gain1 = audioCtx.createGain();
-            const scale1 = scales[primaryType] || scales.pole;
-            const freq1 = scale1[Math.floor(Math.random() * scale1.length)];
-            
-            osc1.type = (primaryType === 'high' || primaryType === 'rubber') ? 'sine' :
-                        (primaryType === 'wood' || primaryType === 'mid' || primaryType === 'pole') ? 'triangle' :
-                        (primaryType === 'neon') ? 'square' : 'sawtooth';
-            osc1.frequency.setValueAtTime(freq1, now);
-
-            const baseVol1 = volumes[primaryType] !== undefined ? volumes[primaryType] : 1.0;
-            const vol1 = Math.min(0.8, velocity * 0.08) * baseVol1 * masterVolume;
-
-            gain1.gain.setValueAtTime(0, now);
-            gain1.gain.linearRampToValueAtTime(vol1, now + 0.02);
-            gain1.gain.exponentialRampToValueAtTime(0.0001, now + 1.2);
-
-            const filter1 = audioCtx.createBiquadFilter();
-            filter1.type = primaryType === 'bass' ? 'lowpass' : (primaryType === 'neon' ? 'highpass' : 'bandpass');
-            filter1.frequency.setValueAtTime(freq1 * 2.5, now);
-
-            osc1.connect(filter1);
-            filter1.connect(gain1);
-            gain1.connect(audioCtx.destination);
-            osc1.start(now);
-            osc1.stop(now + 1.3);
-
-            if (secondaryType) {
-                const osc2 = audioCtx.createOscillator();
-                const gain2 = audioCtx.createGain();
-                const scale2 = scales[secondaryType] || scales.pole;
-                const freq2 = scale2[Math.floor(Math.random() * scale2.length)];
-
-                osc2.type = 'sine';
-                osc2.frequency.setValueAtTime(freq2 * 1.5, now);
-
-                const baseVol2 = volumes[secondaryType] !== undefined ? volumes[secondaryType] : 1.0;
-                const vol2 = vol1 * 0.7;
-
-                gain2.gain.setValueAtTime(0, now);
-                gain2.gain.linearRampToValueAtTime(vol2, now + 0.03);
-                gain2.gain.exponentialRampToValueAtTime(0.0001, now + 1.0);
-
-                osc2.connect(gain2);
-                gain2.connect(audioCtx.destination);
-                osc2.start(now);
-                osc2.stop(now + 1.1);
+            function updateMasterVolume(val) {
+                masterVolume = parseFloat(val);
             }
-
-            setTimeout(() => { activeSoundsCount = Math.max(0, activeSoundsCount - 1); }, 200);
-            addScore(vol1);
-        }
-
-        let totalHarmony = 0;
-        const scoreEl = document.getElementById('score');
-        function addScore(points) {
-            totalHarmony += Math.round(points * 2000);
-            scoreEl.innerText = totalHarmony;
-        }
-        function clearScore() {
-            totalHarmony = 0;
-            scoreEl.innerText = "0";
-        }
-
-        let currentChoice = 'bass';
-        let currentMode = 'spawn'; 
-        let linkStartBody = null;
-        let linkStartPoint = null;
-        let isPaused = false;
-        let ropeIdCounter = 0;
-
-        function toggleToolbox() {
-            const tb = document.getElementById('toolbox');
-            tb.classList.toggle('collapsed');
-        }
-
-        function updateRopeProps() {
-            const segVal = document.getElementById('slider-rope-seg').value;
-            const stiffVal = parseFloat(document.getElementById('slider-rope-stiff').value);
-            
-            document.getElementById('val-rope-seg').innerText = segVal;
-            document.getElementById('val-rope-stiff').innerText = stiffVal;
-
-            for (let j = world.getJointList(); j; j = j.getNext()) {
-                if (j.isRopeDistanceJoint && typeof j.setFrequency === 'function') {
-                    j.setFrequency(stiffVal * 15);
+            function resetMixer() {
+                masterVolume = 0.8;
+                document.getElementById("vol-master").value = 0.8;
+                for (let key in volumes) {
+                    volumes[key] = 0.8;
+                    const slider = document.getElementById("vol-" + key);
+                    if (slider) slider.value = 0.8;
                 }
             }
-        }
 
-        function toggleTheme() {
-            document.body.classList.toggle('light-theme');
-        }
+            let activeSoundsCount = 0;
+            const MAX_SIMULTANEOUS_SOUNDS = 12;
 
-        function togglePause() {
-            isPaused = !isPaused;
-            const btn = document.getElementById('btn-pause-play');
-            if (isPaused) {
-                btn.innerText = "▶️ Play";
-                document.getElementById('instruction-mode').innerText = "Simulazione in PAUSA.";
-            } else {
-                btn.innerText = "⏸️ Pausa";
-                document.getElementById('instruction-mode').innerText = "Simulazione attiva.";
-            }
-        }
+            function playMixedSound(typeA, typeB, velocity) {
+                if (audioCtx.state === "suspended") audioCtx.resume();
+                if (activeSoundsCount >= MAX_SIMULTANEOUS_SOUNDS) return;
+                activeSoundsCount++;
 
-        function selectBlock(type) {
-            if (currentMode === 'spawn' && currentChoice === type) {
-                currentMode = 'none';
-                document.querySelectorAll('.block-btn').forEach(btn => btn.classList.remove('active'));
-                document.getElementById('instruction-mode').innerText = "Modalità Libera: Trascina solo per muovere gli oggetti.";
-            } else {
-                currentMode = 'spawn';
-                currentChoice = type;
-                linkStartBody = null;
-                linkStartPoint = null;
-                document.querySelectorAll('.block-btn').forEach(btn => btn.classList.remove('active'));
-                document.querySelectorAll('.special-btn').forEach(btn => btn.classList.remove('active'));
-                document.getElementById('btn-' + type).classList.add('active');
-                document.getElementById('instruction-mode').innerText = "Trascina per muovere. Clicca a vuoto per spawnare.";
-            }
-        }
+                const now = audioCtx.currentTime;
+                const primaryType = typeA;
+                const secondaryType = typeB && typeB !== typeA ? typeB : null;
 
-        function setMode(mode) {
-            if (currentMode === mode) {
-                currentMode = 'none';
-                linkStartBody = null;
-                linkStartPoint = null;
-                document.querySelectorAll('.special-btn').forEach(btn => btn.classList.remove('active'));
-                document.getElementById('instruction-mode').innerText = "Modalità Libera: Trascina solo per muovere gli oggetti.";
-            } else {
-                currentMode = mode;
-                linkStartBody = null;
-                linkStartPoint = null;
-                document.querySelectorAll('.block-btn').forEach(btn => btn.classList.remove('active'));
-                document.querySelectorAll('.special-btn').forEach(btn => btn.classList.remove('active'));
-                document.getElementById('btn-' + mode).classList.add('active');
+                // Sintesi ultra-morbida e calda per evitare clipping: filtri passa-basso stretti, gain controllati e inviluppi esponenziali fluidi
+                const scale1 = scales[primaryType] || scales.pole;
+                const freq1 = scale1[Math.floor(Math.random() * scale1.length)];
 
-                if (mode === 'bar') {
-                    document.getElementById('instruction-mode').innerText = "Modo Barra Rigida: Clicca sul primo punto e poi sul secondo.";
-                } else if (mode === 'rope') {
-                    document.getElementById('instruction-mode').innerText = "Modo Corda: Clicca sul primo punto e poi sul secondo.";
-                } else if (mode === 'chain') {
-                    document.getElementById('instruction-mode').innerText = "Modo Catena Rigida: Clicca sul primo punto e poi sul secondo.";
-                } else if (mode === 'eraser') {
-                    document.getElementById('instruction-mode').innerText = "Modo Gomma: Clicca un oggetto, una barra o una corda per cancellarla.";
+                const osc1 = audioCtx.createOscillator();
+                const oscSub = audioCtx.createOscillator();
+                const gain1 = audioCtx.createGain();
+                const filter1 = audioCtx.createBiquadFilter();
+
+                osc1.type = "sine"; // Usiamo 'sine' per un suono più dolce e rotondo
+                osc1.frequency.setValueAtTime(freq1, now);
+
+                oscSub.type = "sine";
+                oscSub.frequency.setValueAtTime(freq1 * 0.5, now);
+
+                filter1.type = "lowpass";
+                filter1.frequency.setValueAtTime(Math.min(freq1 * 1.8, 1600), now);
+                filter1.Q.setValueAtTime(0.5, now);
+
+                const baseVol1 = volumes[primaryType] !== undefined ? volumes[primaryType] : 0.8;
+                const vol1 = Math.min(0.25, velocity * 0.03) * baseVol1 * masterVolume;
+
+                gain1.gain.setValueAtTime(0, now);
+                gain1.gain.linearRampToValueAtTime(vol1, now + 0.12);
+                gain1.gain.exponentialRampToValueAtTime(0.0001, now + 2.5);
+
+                osc1.connect(filter1);
+                oscSub.connect(filter1);
+                filter1.connect(gain1);
+                gain1.connect(audioCtx.destination);
+
+                osc1.start(now);
+                oscSub.start(now);
+                osc1.stop(now + 2.6);
+                oscSub.stop(now + 2.6);
+
+                if (secondaryType) {
+                    const scale2 = scales[secondaryType] || scales.pole;
+                    const freq2 = scale2[Math.floor(Math.random() * scale2.length)];
+
+                    const osc2 = audioCtx.createOscillator();
+                    const gain2 = audioCtx.createGain();
+                    const filter2 = audioCtx.createBiquadFilter();
+
+                    osc2.type = "sine";
+                    osc2.frequency.setValueAtTime(freq2 / 2, now);
+
+                    filter2.type = "lowpass";
+                    filter2.frequency.setValueAtTime(1400, now);
+
+                    const baseVol2 = volumes[secondaryType] !== undefined ? volumes[secondaryType] : 0.8;
+                    const vol2 = vol1 * 0.35;
+
+                    gain2.gain.setValueAtTime(0, now);
+                    gain2.gain.linearRampToValueAtTime(vol2, now + 0.05);
+                    gain2.gain.exponentialRampToValueAtTime(0.0001, now + 2.2);
+
+                    osc2.connect(filter2);
+                    filter2.connect(gain2);
+                    gain2.connect(audioCtx.destination);
+
+                    osc2.start(now);
+                    osc2.stop(now + 2.3);
                 }
+
+                setTimeout(() => {
+                    activeSoundsCount = Math.max(0, activeSoundsCount - 1);
+                }, 300);
+                addScore(vol1);
             }
-        }
 
-        const world = planck.World({
-            gravity: planck.Vec2(0, 20.0)
-        });
-
-        const canvas = document.getElementById('game-canvas');
-        const ctx = canvas.getContext('2d');
-
-        const wallThickness = 40;
-        const ground = world.createBody({ type: 'static', position: planck.Vec2(window.innerWidth/2, window.innerHeight - 20) });
-        let groundFixture = ground.createFixture(planck.Box(window.innerWidth/2, wallThickness/2), { friction: 0.3 });
-        ground.isWall = true;
-
-        const wallLeft = world.createBody({ type: 'static', position: planck.Vec2(wallThickness/2, window.innerHeight/2) });
-        let wallLeftFixture = wallLeft.createFixture(planck.Box(wallThickness/2, window.innerHeight/2), { friction: 0.3 });
-        wallLeft.isWall = true;
-
-        const wallRight = world.createBody({ type: 'static', position: planck.Vec2(window.innerWidth - wallThickness/2, window.innerHeight/2) });
-        let wallRightFixture = wallRight.createFixture(planck.Box(wallThickness/2, window.innerHeight/2), { friction: 0.3 });
-        wallRight.isWall = true;
-
-        const ceiling = world.createBody({ type: 'static', position: planck.Vec2(window.innerWidth/2, wallThickness/2) });
-        let ceilingFixture = ceiling.createFixture(planck.Box(window.innerWidth/2, wallThickness/2), { friction: 0.3 });
-        ceiling.isWall = true;
-
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-
-            if (ground && wallLeft && wallRight && ceiling) {
-                ground.setPosition(planck.Vec2(window.innerWidth / 2, window.innerHeight - 20));
-                ground.destroyFixture(groundFixture);
-                groundFixture = ground.createFixture(planck.Box(window.innerWidth / 2, wallThickness / 2), { friction: 0.3 });
-
-                wallRight.setPosition(planck.Vec2(window.innerWidth - wallThickness / 2, window.innerHeight / 2));
-                wallRight.destroyFixture(wallRightFixture);
-                wallRightFixture = wallRight.createFixture(planck.Box(wallThickness / 2, window.innerHeight / 2), { friction: 0.3 });
-
-                ceiling.setPosition(planck.Vec2(window.innerWidth / 2, wallThickness / 2));
-                ceiling.destroyFixture(ceilingFixture);
-                ceilingFixture = ceiling.createFixture(planck.Box(window.innerWidth / 2, wallThickness / 2), { friction: 0.3 });
-
-                wallLeft.setPosition(planck.Vec2(wallThickness / 2, window.innerHeight / 2));
-                wallLeft.destroyFixture(wallLeftFixture);
-                wallLeftFixture = wallLeft.createFixture(planck.Box(wallThickness / 2, window.innerHeight / 2), { friction: 0.3 });
+            let totalHarmony = 0;
+            const scoreEl = document.getElementById("score");
+            function addScore(points) {
+                totalHarmony += Math.round(points * 2000);
+                scoreEl.innerText = totalHarmony;
             }
-        }
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
-
-        let windSpeed = 0.0;
-        let windTurbulence = 0.0;
-
-        function updatePhysics() {
-            const gravVal = parseFloat(document.getElementById('slider-gravity').value);
-            const dragVal = parseFloat(document.getElementById('slider-drag').value);
-            windSpeed = parseFloat(document.getElementById('slider-wind').value);
-            windTurbulence = parseFloat(document.getElementById('slider-turbulence').value);
-            
-            document.getElementById('val-gravity').innerText = gravVal;
-            document.getElementById('val-drag').innerText = dragVal;
-            document.getElementById('val-wind').innerText = windSpeed;
-            document.getElementById('val-turbulence').innerText = windTurbulence;
-
-            world.setGravity(planck.Vec2(0, gravVal));
-
-            for (let b = world.getBodyList(); b; b = b.getNext()) {
-                if (!b.isStatic() && !b.isWall) {
-                    b.setLinearDamping(dragVal);
-                }
+            function clearScore() {
+                totalHarmony = 0;
+                scoreEl.innerText = "0";
             }
-        }
 
-        function resetPhysics() {
-            document.getElementById('slider-gravity').value = 20.0;
-            document.getElementById('slider-drag').value = 0.001;
-            document.getElementById('slider-wind').value = 0.0;
-            document.getElementById('slider-turbulence').value = 0.0;
-            updatePhysics();
-        }
+            let currentChoice = "bass";
+            let currentMode = "spawn";
+            let linkStartBody = null;
+            let linkStartPoint = null;
+            let isPaused = false;
+            let ropeIdCounter = 0;
 
-        let mouseJoint = null;
-        let mouseBody = world.createBody();
+            function toggleToolbox(event) {
+                if (event) event.stopPropagation();
+                const tb = document.getElementById("toolbox");
+                tb.classList.toggle("collapsed");
+            }
 
-        canvas.addEventListener('pointerdown', (event) => {
-            const clientX = event.clientX;
-            const clientY = event.clientY;
+            function updateRopeProps() {
+                const segVal = document.getElementById("slider-rope-seg").value;
+                const stiffVal = parseFloat(document.getElementById("slider-rope-stiff").value);
 
-            if (clientX < 260 && clientY < 200) return;
-            if (clientX > window.innerWidth - 260 && clientY < 500) return;
+                document.getElementById("val-rope-seg").innerText = segVal;
+                document.getElementById("val-rope-stiff").innerText = stiffVal;
 
-            const mousePos = planck.Vec2(clientX, clientY);
-
-            let clickedBody = null;
-            for (let b = world.getBodyList(); b; b = b.getNext()) {
-                if (b.isWall) continue;
-                for (let f = b.getFixtureList(); f; f = f.getNext()) {
-                    if (f.testPoint(mousePos)) {
-                        clickedBody = b;
-                        break;
+                for (let j = world.getJointList(); j; j = j.getNext()) {
+                    if (j.isRopeDistanceJoint && typeof j.setFrequency === "function") {
+                        j.setFrequency(stiffVal * 15);
                     }
                 }
-                if (clickedBody) break;
             }
 
-            if (currentMode === 'none') {
-                if (clickedBody && !clickedBody.isWall) {
-                    mouseJoint = world.createJoint(planck.MouseJoint({
-                        bodyA: mouseBody,
-                        bodyB: clickedBody,
-                        target: mousePos,
-                        maxForce: 3000 * clickedBody.getMass(),
-                        frequencyHz: 5.0,
-                        dampingRatio: 0.7
-                    }));
+            function toggleTheme() {
+                document.body.classList.toggle("light-theme");
+            }
+
+            function togglePause() {
+                isPaused = !isPaused;
+                const btn = document.getElementById("btn-pause-play");
+                if (isPaused) {
+                    btn.innerText = "▶️ Play";
+                    document.getElementById("instruction-mode").innerText = "Simulazione in PAUSA.";
+                } else {
+                    btn.innerText = "⏸️ Pausa";
+                    document.getElementById("instruction-mode").innerText = "Simulazione attiva.";
                 }
-                return;
             }
 
-            if (currentMode === 'spawn') {
-                if (clickedBody) {
-                    if (!clickedBody.isWall) {
-                        mouseJoint = world.createJoint(planck.MouseJoint({
-                            bodyA: mouseBody,
-                            bodyB: clickedBody,
-                            target: mousePos,
-                            maxForce: 3000 * clickedBody.getMass(),
-                            frequencyHz: 5.0,
-                            dampingRatio: 0.7
-                        }));
+            function selectBlock(type) {
+                if (currentMode === "spawn" && currentChoice === type) {
+                    currentMode = "none";
+                    document.querySelectorAll(".block-btn").forEach((btn) => btn.classList.remove("active"));
+                    document.getElementById("instruction-mode").innerText =
+                        "Modalità Libera: Trascina solo per muovere gli oggetti.";
+                } else {
+                    currentMode = "spawn";
+                    currentChoice = type;
+                    linkStartBody = null;
+                    linkStartPoint = null;
+                    document.querySelectorAll(".block-btn").forEach((btn) => btn.classList.remove("active"));
+                    document.querySelectorAll(".special-btn").forEach((btn) => btn.classList.remove("active"));
+                    document.getElementById("btn-" + type).classList.add("active");
+                    document.getElementById("instruction-mode").innerText =
+                        "Trascina per muovere. Clicca a vuoto per spawnare.";
+                }
+            }
+
+            function setMode(mode) {
+                if (currentMode === mode) {
+                    currentMode = "none";
+                    linkStartBody = null;
+                    linkStartPoint = null;
+                    document.querySelectorAll(".special-btn").forEach((btn) => btn.classList.remove("active"));
+                    document.getElementById("instruction-mode").innerText =
+                        "Modalità Libera: Trascina solo per muovere gli oggetti.";
+                } else {
+                    currentMode = mode;
+                    linkStartBody = null;
+                    linkStartPoint = null;
+                    document.querySelectorAll(".block-btn").forEach((btn) => btn.classList.remove("active"));
+                    document.querySelectorAll(".special-btn").forEach((btn) => btn.classList.remove("active"));
+                    document.getElementById("btn-" + mode).classList.add("active");
+
+                    if (mode === "bar") {
+                        document.getElementById("instruction-mode").innerText =
+                            "Modo Barra Rigida: Clicca sul primo punto e poi sul secondo.";
+                    } else if (mode === "rope") {
+                        document.getElementById("instruction-mode").innerText =
+                            "Modo Corda: Clicca sul primo punto e poi sul secondo.";
+                    } else if (mode === "chain") {
+                        document.getElementById("instruction-mode").innerText =
+                            "Modo Catena Rigida: Clicca sul primo punto e poi sul secondo.";
+                    } else if (mode === "eraser") {
+                        document.getElementById("instruction-mode").innerText =
+                            "Modo Gomma: Clicca un oggetto, una barra o una corda per cancellarla.";
+                    }
+                }
+            }
+
+            const world = planck.World({
+                gravity: planck.Vec2(0, 20.0)
+            });
+
+            const canvas = document.getElementById("game-canvas");
+            const ctx = canvas.getContext("2d");
+
+            const wallThickness = 40;
+            const ground = world.createBody({
+                type: "static",
+                position: planck.Vec2(window.innerWidth / 2, window.innerHeight - 20)
+            });
+            let groundFixture = ground.createFixture(planck.Box(window.innerWidth / 2, wallThickness / 2), {
+                friction: 0.3
+            });
+            ground.isWall = true;
+
+            const wallLeft = world.createBody({
+                type: "static",
+                position: planck.Vec2(wallThickness / 2, window.innerHeight / 2)
+            });
+            let wallLeftFixture = wallLeft.createFixture(planck.Box(wallThickness / 2, window.innerHeight / 2), {
+                friction: 0.3
+            });
+            wallLeft.isWall = true;
+
+            const wallRight = world.createBody({
+                type: "static",
+                position: planck.Vec2(window.innerWidth - wallThickness / 2, window.innerHeight / 2)
+            });
+            let wallRightFixture = wallRight.createFixture(planck.Box(wallThickness / 2, window.innerHeight / 2), {
+                friction: 0.3
+            });
+            wallRight.isWall = true;
+
+            const ceiling = world.createBody({
+                type: "static",
+                position: planck.Vec2(window.innerWidth / 2, wallThickness / 2)
+            });
+            let ceilingFixture = ceiling.createFixture(planck.Box(window.innerWidth / 2, wallThickness / 2), {
+                friction: 0.3
+            });
+            ceiling.isWall = true;
+
+            function resizeCanvas() {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+
+                if (ground && wallLeft && wallRight && ceiling) {
+                    ground.setPosition(planck.Vec2(window.innerWidth / 2, window.innerHeight - 20));
+                    ground.destroyFixture(groundFixture);
+                    groundFixture = ground.createFixture(planck.Box(window.innerWidth / 2, wallThickness / 2), {
+                        friction: 0.3
+                    });
+
+                    wallRight.setPosition(planck.Vec2(window.innerWidth - wallThickness / 2, window.innerHeight / 2));
+                    wallRight.destroyFixture(wallRightFixture);
+                    wallRightFixture = wallRight.createFixture(planck.Box(wallThickness / 2, window.innerHeight / 2), {
+                        friction: 0.3
+                    });
+
+                    ceiling.setPosition(planck.Vec2(window.innerWidth / 2, wallThickness / 2));
+                    ceiling.destroyFixture(ceilingFixture);
+                    ceilingFixture = ceiling.createFixture(planck.Box(window.innerWidth / 2, wallThickness / 2), {
+                        friction: 0.3
+                    });
+
+                    wallLeft.setPosition(planck.Vec2(wallThickness / 2, window.innerHeight / 2));
+                    wallLeft.destroyFixture(wallLeftFixture);
+                    wallLeftFixture = wallLeft.createFixture(planck.Box(wallThickness / 2, window.innerHeight / 2), {
+                        friction: 0.3
+                    });
+                }
+            }
+            window.addEventListener("resize", resizeCanvas);
+            resizeCanvas();
+
+            let windSpeed = 0.0;
+            let windTurbulence = 0.0;
+
+            function updatePhysics() {
+                const gravVal = parseFloat(document.getElementById("slider-gravity").value);
+                const dragVal = parseFloat(document.getElementById("slider-drag").value);
+                windSpeed = parseFloat(document.getElementById("slider-wind").value);
+                windTurbulence = parseFloat(document.getElementById("slider-turbulence").value);
+
+                document.getElementById("val-gravity").innerText = gravVal;
+                document.getElementById("val-drag").innerText = dragVal;
+                document.getElementById("val-wind").innerText = windSpeed;
+                document.getElementById("val-turbulence").innerText = windTurbulence;
+
+                world.setGravity(planck.Vec2(0, gravVal));
+
+                for (let b = world.getBodyList(); b; b = b.getNext()) {
+                    if (!b.isStatic() && !b.isWall) {
+                        b.setLinearDamping(dragVal);
+                    }
+                }
+            }
+
+            function resetPhysics() {
+                document.getElementById("slider-gravity").value = 20.0;
+                document.getElementById("slider-drag").value = 0.001;
+                document.getElementById("slider-wind").value = 0.0;
+                document.getElementById("slider-turbulence").value = 0.0;
+                updatePhysics();
+            }
+
+            let mouseJoint = null;
+            let mouseBody = world.createBody();
+
+            canvas.addEventListener("pointerdown", (event) => {
+                const clientX = event.clientX;
+                const clientY = event.clientY;
+
+                if (clientX < 260 && clientY < 200) return;
+                if (clientX > window.innerWidth - 280 && clientY < 60) return;
+
+                const toolbox = document.getElementById("toolbox");
+                if (
+                    !toolbox.classList.contains("collapsed") &&
+                    clientX > window.innerWidth - 300 &&
+                    clientY < window.innerHeight
+                ) {
+                    return;
+                }
+
+                const mousePos = planck.Vec2(clientX, clientY);
+
+                let clickedBody = null;
+                for (let b = world.getBodyList(); b; b = b.getNext()) {
+                    if (b.isWall) continue;
+                    for (let f = b.getFixtureList(); f; f = f.getNext()) {
+                        if (f.testPoint(mousePos)) {
+                            clickedBody = b;
+                            break;
+                        }
+                    }
+                    if (clickedBody) break;
+                }
+
+                if (currentMode === "none") {
+                    if (clickedBody && !clickedBody.isWall) {
+                        mouseJoint = world.createJoint(
+                            planck.MouseJoint({
+                                bodyA: mouseBody,
+                                bodyB: clickedBody,
+                                target: mousePos,
+                                maxForce: 3000 * clickedBody.getMass(),
+                                frequencyHz: 5.0,
+                                dampingRatio: 0.7
+                            })
+                        );
                     }
                     return;
                 }
-                spawnElement(mousePos.x, mousePos.y, currentChoice);
-                return;
-            }
 
-            if (currentMode === 'eraser') {
-                let clickedJoint = null;
-                for (let j = world.getJointList(); j; j = j.getNext()) {
-                    if (typeof j.getAnchorA === 'function' && typeof j.getAnchorB === 'function') {
-                        const aA = j.getAnchorA();
-                        const aB = j.getAnchorB();
-                        if (aA && aB) {
-                            const dist = distToSegment(mousePos, aA, aB);
-                            if (dist < 15) {
-                                clickedJoint = j;
-                                break;
-                            }
+                if (currentMode === "spawn") {
+                    if (clickedBody) {
+                        if (!clickedBody.isWall) {
+                            mouseJoint = world.createJoint(
+                                planck.MouseJoint({
+                                    bodyA: mouseBody,
+                                    bodyB: clickedBody,
+                                    target: mousePos,
+                                    maxForce: 3000 * clickedBody.getMass(),
+                                    frequencyHz: 5.0,
+                                    dampingRatio: 0.7
+                                })
+                            );
                         }
+                        return;
                     }
+                    spawnElement(mousePos.x, mousePos.y, currentChoice);
+                    return;
                 }
 
-                if (clickedJoint) {
-                    if (clickedJoint.ropeId !== undefined) {
-                        const rId = clickedJoint.ropeId;
-                        let b = world.getBodyList();
-                        while (b) {
-                            let nextB = b.getNext();
-                            if (b.ropeId === rId) world.destroyBody(b);
-                            b = nextB;
-                        }
-                        let j = world.getJointList();
-                        while (j) {
-                            let nextJ = j.getNext();
-                            if (j.ropeId === rId) world.destroyJoint(j);
-                            j = nextJ;
-                        }
-                    } else {
-                        world.destroyJoint(clickedJoint);
-                    }
-                } else if (clickedBody) {
-                    if (clickedBody.ropeId !== undefined) {
-                        const rId = clickedBody.ropeId;
-                        let b = world.getBodyList();
-                        while (b) {
-                            let nextB = b.getNext();
-                            if (b.ropeId === rId) world.destroyBody(b);
-                            b = nextB;
-                        }
-                        let j = world.getJointList();
-                        while (j) {
-                            let nextJ = j.getNext();
-                            if (j.ropeId === rId) world.destroyJoint(j);
-                            j = nextJ;
-                        }
-                    } else {
-                        let j = world.getJointList();
-                        while (j) {
-                            let nextJ = j.getNext();
-                            if (j.getBodyA() === clickedBody || j.getBodyB() === clickedBody) {
-                                world.destroyJoint(j);
+                if (currentMode === "eraser") {
+                    let clickedJoint = null;
+                    for (let j = world.getJointList(); j; j = j.getNext()) {
+                        if (typeof j.getAnchorA === "function" && typeof j.getAnchorB === "function") {
+                            const aA = j.getAnchorA();
+                            const aB = j.getAnchorB();
+                            if (aA && aB) {
+                                const dist = distToSegment(mousePos, aA, aB);
+                                if (dist < 15) {
+                                    clickedJoint = j;
+                                    break;
+                                }
                             }
-                            j = nextJ;
                         }
-                        world.destroyBody(clickedBody);
                     }
-                }
-            } else if (currentMode === 'bar' || currentMode === 'rope' || currentMode === 'chain') {
-                if (clickedBody) {
-                    const localPoint = clickedBody.getLocalPoint(mousePos);
-                    if (!linkStartBody) {
-                        linkStartBody = clickedBody;
-                        linkStartPoint = localPoint;
-                    } else {
-                        const posA = linkStartBody.getWorldPoint(linkStartPoint);
-                        const posB = clickedBody.getWorldPoint(localPoint);
 
-                        if (currentMode === 'bar') {
-                            const joint = world.createJoint(planck.DistanceJoint({
-                                bodyA: linkStartBody,
-                                bodyB: clickedBody,
-                                localAnchorA: linkStartPoint,
-                                localAnchorB: localPoint,
-                                length: planck.Vec2.distance(posA, posB),
-                                frequencyHz: 0,
-                                dampingRatio: 0.1
-                            }));
-                            joint.isCustomRender = true;
-                            joint.renderColor = '#ffa502';
-                            joint.renderWidth = 4;
-                        } else if (currentMode === 'chain') {
-                            ropeIdCounter++;
-                            const currentRopeId = ropeIdCounter;
-                            const numSegments = parseInt(document.getElementById('slider-rope-seg').value);
-
-                            let prevBody = linkStartBody;
-                            let prevAnchor = linkStartPoint;
-
-                            const totalDist = planck.Vec2.distance(posA, posB);
-                            const segmentLength = totalDist / numSegments;
-                            const angle = Math.atan2(posB.y - posA.y, posB.x - posA.x);
-
-                            for (let i = 1; i < numSegments; i++) {
-                                const percent = i / numSegments;
-                                const x = posA.x + (posB.x - posA.x) * percent;
-                                const y = posA.y + (posB.y - posA.y) * percent;
-
-                                const segBody = world.createDynamicBody({
-                                    position: planck.Vec2(x, y),
-                                    angle: angle
-                                });
-                                segBody.createFixture(planck.Box(segmentLength * 0.45, 7, planck.Vec2(0,0), 0), {
-                                    density: 0.1,
-                                    friction: 0.1
-                                });
-                                segBody.setLinearDamping(parseFloat(document.getElementById('slider-drag').value));
-                                segBody.ropeId = currentRopeId;
-
-                                const revJoint = world.createJoint(planck.RevoluteJoint({
-                                    bodyA: prevBody,
-                                    bodyB: segBody,
-                                    localAnchorA: (prevBody === linkStartBody) ? prevAnchor : planck.Vec2(segmentLength * 0.45, 0),
-                                    localAnchorB: planck.Vec2(-segmentLength * 0.45, 0),
-                                    enableLimit: true,
-                                    lowerAngle: -0.25,
-                                    upperAngle: 0.25
-                                }));
-                                revJoint.ropeId = currentRopeId;
-                                revJoint.isCustomRender = true;
-                                revJoint.renderColor = '#a4b0be';
-                                revJoint.renderWidth = 3;
-
-                                prevBody = segBody;
-                                prevAnchor = planck.Vec2(segmentLength * 0.45, 0);
+                    if (clickedJoint) {
+                        if (clickedJoint.ropeId !== undefined) {
+                            const rId = clickedJoint.ropeId;
+                            let b = world.getBodyList();
+                            while (b) {
+                                let nextB = b.getNext();
+                                if (b.ropeId === rId) world.destroyBody(b);
+                                b = nextB;
                             }
-
-                            const finalJoint = world.createJoint(planck.RevoluteJoint({
-                                bodyA: prevBody,
-                                bodyB: clickedBody,
-                                localAnchorA: prevAnchor,
-                                localAnchorB: localPoint,
-                                enableLimit: true,
-                                lowerAngle: -0.25,
-                                upperAngle: 0.25
-                            }));
-                            finalJoint.ropeId = currentRopeId;
-                            finalJoint.isCustomRender = true;
-                            finalJoint.renderColor = '#a4b0be';
-                            finalJoint.renderWidth = 3;
-
+                            let j = world.getJointList();
+                            while (j) {
+                                let nextJ = j.getNext();
+                                if (j.ropeId === rId) world.destroyJoint(j);
+                                j = nextJ;
+                            }
                         } else {
-                            ropeIdCounter++;
-                            const currentRopeId = ropeIdCounter;
-                            const numSegments = parseInt(document.getElementById('slider-rope-seg').value);
-                            const ropeStiffness = parseFloat(document.getElementById('slider-rope-stiff').value);
-                            const totalDist = planck.Vec2.distance(posA, posB);
-                            const segmentLength = totalDist / numSegments;
+                            world.destroyJoint(clickedJoint);
+                        }
+                    } else if (clickedBody) {
+                        if (clickedBody.ropeId !== undefined) {
+                            const rId = clickedBody.ropeId;
+                            let b = world.getBodyList();
+                            while (b) {
+                                let nextB = b.getNext();
+                                if (b.ropeId === rId) world.destroyBody(b);
+                                b = nextB;
+                            }
+                            let j = world.getJointList();
+                            while (j) {
+                                let nextJ = j.getNext();
+                                if (j.ropeId === rId) world.destroyJoint(j);
+                                j = nextJ;
+                            }
+                        } else {
+                            let j = world.getJointList();
+                            while (j) {
+                                let nextJ = j.getNext();
+                                if (j.getBodyA() === clickedBody || j.getBodyB() === clickedBody) {
+                                    world.destroyJoint(j);
+                                }
+                                j = nextJ;
+                            }
+                            world.destroyBody(clickedBody);
+                        }
+                    }
+                } else if (currentMode === "bar" || currentMode === "rope" || currentMode === "chain") {
+                    if (clickedBody) {
+                        const localPoint = clickedBody.getLocalPoint(mousePos);
+                        if (!linkStartBody) {
+                            linkStartBody = clickedBody;
+                            linkStartPoint = localPoint;
+                        } else {
+                            const posA = linkStartBody.getWorldPoint(linkStartPoint);
+                            const posB = clickedBody.getWorldPoint(localPoint);
 
-                            let prevBody = linkStartBody;
-                            let prevAnchor = linkStartPoint;
-
-                            for (let i = 1; i < numSegments; i++) {
-                                const percent = i / numSegments;
-                                const x = posA.x + (posB.x - posA.x) * percent;
-                                const y = posA.y + (posB.y - posA.y) * percent;
-
-                                const segBody = world.createDynamicBody({
-                                    position: planck.Vec2(x, y)
-                                });
-                                segBody.createFixture(planck.Circle(2.0), {
-                                    density: 0.05,
-                                    filterCategoryBits: 0x0002
-                                });
-                                segBody.ropeId = currentRopeId;
-
-                                const joint = world.createJoint(planck.DistanceJoint({
-                                    bodyA: prevBody,
-                                    bodyB: segBody,
-                                    localAnchorA: prevAnchor,
-                                    length: segmentLength,
-                                    frequencyHz: ropeStiffness * 15,
-                                    dampingRatio: 0.5
-                                }));
-                                joint.ropeId = currentRopeId;
-                                joint.isRopeDistanceJoint = true;
+                            if (currentMode === "bar") {
+                                const joint = world.createJoint(
+                                    planck.DistanceJoint({
+                                        bodyA: linkStartBody,
+                                        bodyB: clickedBody,
+                                        localAnchorA: linkStartPoint,
+                                        localAnchorB: localPoint,
+                                        length: planck.Vec2.distance(posA, posB),
+                                        frequencyHz: 0,
+                                        dampingRatio: 0.1
+                                    })
+                                );
                                 joint.isCustomRender = true;
-                                joint.renderColor = '#ff4757';
-                                joint.renderWidth = 2;
+                                joint.renderColor = "#ffa502";
+                                joint.renderWidth = 4;
+                            } else if (currentMode === "chain") {
+                                ropeIdCounter++;
+                                const currentRopeId = ropeIdCounter;
+                                const numSegments = parseInt(document.getElementById("slider-rope-seg").value);
 
-                                prevBody = segBody;
-                                prevAnchor = planck.Vec2(0,0);
+                                let prevBody = linkStartBody;
+                                let prevAnchor = linkStartPoint;
+
+                                const totalDist = planck.Vec2.distance(posA, posB);
+                                const segmentLength = totalDist / numSegments;
+                                const angle = Math.atan2(posB.y - posA.y, posB.x - posA.x);
+
+                                for (let i = 1; i < numSegments; i++) {
+                                    const percent = i / numSegments;
+                                    const x = posA.x + (posB.x - posA.x) * percent;
+                                    const y = posA.y + (posB.y - posA.y) * percent;
+
+                                    const segBody = world.createDynamicBody({
+                                        position: planck.Vec2(x, y),
+                                        angle: angle
+                                    });
+                                    segBody.createFixture(planck.Box(segmentLength * 0.45, 7, planck.Vec2(0, 0), 0), {
+                                        density: 0.1,
+                                        friction: 0.1
+                                    });
+                                    segBody.setLinearDamping(parseFloat(document.getElementById("slider-drag").value));
+                                    segBody.ropeId = currentRopeId;
+
+                                    const revJoint = world.createJoint(
+                                        planck.RevoluteJoint({
+                                            bodyA: prevBody,
+                                            bodyB: segBody,
+                                            localAnchorA:
+                                                prevBody === linkStartBody
+                                                    ? prevAnchor
+                                                    : planck.Vec2(segmentLength * 0.45, 0),
+                                            localAnchorB: planck.Vec2(-segmentLength * 0.45, 0),
+                                            enableLimit: true,
+                                            lowerAngle: -0.25,
+                                            upperAngle: 0.25
+                                        })
+                                    );
+                                    revJoint.ropeId = currentRopeId;
+                                    revJoint.isCustomRender = true;
+                                    revJoint.renderColor = "#a4b0be";
+                                    revJoint.renderWidth = 3;
+
+                                    prevBody = segBody;
+                                    prevAnchor = planck.Vec2(segmentLength * 0.45, 0);
+                                }
+
+                                const finalJoint = world.createJoint(
+                                    planck.RevoluteJoint({
+                                        bodyA: prevBody,
+                                        bodyB: clickedBody,
+                                        localAnchorA: prevAnchor,
+                                        localAnchorB: localPoint,
+                                        enableLimit: true,
+                                        lowerAngle: -0.25,
+                                        upperAngle: 0.25
+                                    })
+                                );
+                                finalJoint.ropeId = currentRopeId;
+                                finalJoint.isCustomRender = true;
+                                finalJoint.renderColor = "#a4b0be";
+                                finalJoint.renderWidth = 3;
+                            } else {
+                                ropeIdCounter++;
+                                const currentRopeId = ropeIdCounter;
+                                const numSegments = parseInt(document.getElementById("slider-rope-seg").value);
+                                const ropeStiffness = parseFloat(document.getElementById("slider-rope-stiff").value);
+                                const totalDist = planck.Vec2.distance(posA, posB);
+                                const segmentLength = totalDist / numSegments;
+
+                                let prevBody = linkStartBody;
+                                let prevAnchor = linkStartPoint;
+
+                                for (let i = 1; i < numSegments; i++) {
+                                    const percent = i / numSegments;
+                                    const x = posA.x + (posB.x - posA.x) * percent;
+                                    const y = posA.y + (posB.y - posA.y) * percent;
+
+                                    const segBody = world.createDynamicBody({
+                                        position: planck.Vec2(x, y)
+                                    });
+                                    segBody.createFixture(planck.Circle(2.0), {
+                                        density: 0.05,
+                                        filterCategoryBits: 0x0002
+                                    });
+                                    segBody.ropeId = currentRopeId;
+
+                                    const joint = world.createJoint(
+                                        planck.DistanceJoint({
+                                            bodyA: prevBody,
+                                            bodyB: segBody,
+                                            localAnchorA: prevAnchor,
+                                            length: segmentLength,
+                                            frequencyHz: ropeStiffness * 15,
+                                            dampingRatio: 0.5
+                                        })
+                                    );
+                                    joint.ropeId = currentRopeId;
+                                    joint.isRopeDistanceJoint = true;
+                                    joint.isCustomRender = true;
+                                    joint.renderColor = "#ff4757";
+                                    joint.renderWidth = 2;
+
+                                    prevBody = segBody;
+                                    prevAnchor = planck.Vec2(0, 0);
+                                }
+
+                                const finalJoint = world.createJoint(
+                                    planck.DistanceJoint({
+                                        bodyA: prevBody,
+                                        bodyB: clickedBody,
+                                        localAnchorA: prevAnchor,
+                                        localAnchorB: localPoint,
+                                        length: segmentLength,
+                                        frequencyHz: ropeStiffness * 15,
+                                        dampingRatio: 0.5
+                                    })
+                                );
+                                finalJoint.ropeId = currentRopeId;
+                                finalJoint.isRopeDistanceJoint = true;
+                                finalJoint.isCustomRender = true;
+                                finalJoint.renderColor = "#ff4757";
+                                finalJoint.renderWidth = 2;
                             }
 
-                            const finalJoint = world.createJoint(planck.DistanceJoint({
-                                bodyA: prevBody,
-                                bodyB: clickedBody,
-                                localAnchorA: prevAnchor,
-                                localAnchorB: localPoint,
-                                length: segmentLength,
-                                frequencyHz: ropeStiffness * 15,
-                                dampingRatio: 0.5
-                            }));
-                            finalJoint.ropeId = currentRopeId;
-                            finalJoint.isRopeDistanceJoint = true;
-                            finalJoint.isCustomRender = true;
-                            finalJoint.renderColor = '#ff4757';
-                            finalJoint.renderWidth = 2;
-                        }
-
-                        linkStartBody = null;
-                        linkStartPoint = null;
-                    }
-                }
-            }
-        });
-
-        function distToSegment(p, p1, p2) {
-            const l2 = (p2.x - p1.x)*(p2.x - p1.x) + (p2.y - p1.y)*(p2.y - p1.y);
-            if (l2 === 0) return Math.hypot(p.x - p1.x, p.y - p1.y);
-            let t =((p.x - p1.x)*(p2.x - p1.x) + (p.y - p1.y)*(p2.y - p1.y)) / l2;
-            t = Math.max(0, Math.min(1, t));
-            return Math.hypot(p.x - (p1.x + t * (p2.x - p1.x)), p.y - (p1.y + t * (p2.y - p1.y)));
-        }
-
-        canvas.addEventListener('pointermove', (event) => {
-            const mousePos = planck.Vec2(event.clientX, event.clientY);
-            if (mouseJoint) {
-                mouseJoint.setTarget(mousePos);
-            }
-        });
-
-        window.addEventListener('pointerup', () => {
-            if (mouseJoint) {
-                world.destroyJoint(mouseJoint);
-                mouseJoint = null;
-            }
-        });
-
-        const blockConfigs = {
-            bass: { name: 'bass', w: 110, h: 45, color: '#ff6b81', density: 1.5, restitution: 0.15 },
-            wood: { name: 'wood', w: 85, h: 32, color: '#e67e22', density: 0.8, restitution: 0.35 },
-            mid: { name: 'mid', w: 60, h: 60, color: '#70a1ff', density: 1.0, restitution: 0.5 },
-            rubber: { name: 'rubber', radius: 26, color: '#ffa502', density: 0.5, restitution: 0.92, isCircle: true },
-            high: { name: 'high', radius: 24, color: '#2ed573', density: 0.4, restitution: 0.75, isCircle: true },
-            neon: { name: 'neon', radius: 28, color: '#ff00ff', density: 0.5, restitution: 0.88, isCircle: true },
-            poleH: { name: 'pole', w: 180, h: 18, color: '#a4b0be', density: 1.2, restitution: 0.2, isStatic: true },
-            poleV: { name: 'pole', w: 18, h: 180, color: '#a4b0be', density: 1.2, restitution: 0.2, isStatic: true }
-        };
-
-        function spawnElement(x, y, typeKey) {
-            const cfg = blockConfigs[typeKey];
-            const currentDrag = parseFloat(document.getElementById('slider-drag').value);
-            
-            let body;
-            if (cfg.isStatic) {
-                body = world.createBody({ type: 'static', position: planck.Vec2(x, y) });
-            } else {
-                body = world.createDynamicBody({ position: planck.Vec2(x, y) });
-            }
-
-            if (cfg.isCircle) {
-                body.createFixture(planck.Circle(cfg.radius), {
-                    density: cfg.density,
-                    restitution: cfg.restitution,
-                    friction: 0.2
-                });
-            } else {
-                body.createFixture(planck.Box(cfg.w/2, cfg.h/2), {
-                    density: cfg.density,
-                    restitution: cfg.restitution,
-                    friction: 0.2
-                });
-            }
-
-            body.setLinearDamping(currentDrag);
-            body.soundType = cfg.name;
-            body.renderColor = cfg.color;
-        }
-
-        world.on('begin-contact', (contact) => {
-            const fixtureA = contact.getFixtureA();
-            const fixtureB = contact.getFixtureB();
-            const bodyA = fixtureA.getBody();
-            const bodyB = fixtureB.getBody();
-
-            if (bodyA.soundType && bodyB.soundType) {
-                const velA = bodyA.getLinearVelocity();
-                const velB = bodyB.getLinearVelocity();
-                const relativeVel = Math.hypot(velA.x - velB.x, velA.y - velB.y);
-                if (relativeVel > 0.8) {
-                    playMixedSound(bodyA.soundType, bodyB.soundType, relativeVel);
-                }
-            }
-        });
-
-        function triggerDecay() {
-            for (let b = world.getBodyList(); b; b = b.getNext()) {
-                if (b.isStatic() || b.isWall) continue;
-                b.applyForceToCenter(planck.Vec2((Math.random() - 0.5) * 4000, -6000 - Math.random() * 4000), true);
-                b.setAngularVelocity((Math.random() - 0.5) * 10);
-            }
-
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(70, audioCtx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.4);
-            gain.gain.setValueAtTime(0.6 * masterVolume, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 1.5);
-            osc.connect(gain); gain.connect(audioCtx.destination);
-            osc.start(); osc.stop(1.5);
-        }
-
-        function clearScene() {
-            let b = world.getBodyList();
-            while (b) {
-                let nextB = b.getNext();
-                if (!b.isWall) {
-                    world.destroyBody(b);
-                }
-                b = nextB;
-            }
-            linkStartBody = null;
-            linkStartPoint = null;
-            clearScore();
-        }
-
-        let timeStep = 1 / 60;
-        let velIterations = 8;
-        let posIterations = 3;
-
-        function gameLoop() {
-            if (!isPaused) {
-                if (windSpeed !== 0 || windTurbulence > 0) {
-                    const time = Date.now() * 0.003;
-                    for (let b = world.getBodyList(); b; b = b.getNext()) {
-                        if (!b.isStatic() && !b.isWall) {
-                            const noise = (Math.sin(time + (b.getPosition().x * 0.05)) * 0.5 + Math.cos(time * 0.7) * 0.5) * windTurbulence;
-                            const totalWindForce = (windSpeed + noise) * 300;
-                            b.applyForceToCenter(planck.Vec2(totalWindForce, 0), true);
+                            linkStartBody = null;
+                            linkStartPoint = null;
                         }
                     }
                 }
-                world.step(timeStep, velIterations, posIterations);
+            });
+
+            function distToSegment(p, p1, p2) {
+                const l2 = (p2.x - p1.x) * (p2.x - p1.x) + (p2.y - p1.y) * (p2.y - p1.y);
+                if (l2 === 0) return Math.hypot(p.x - p1.x, p.y - p1.y);
+                let t = ((p.x - p1.x) * (p2.x - p1.x) + (p.y - p1.y) * (p2.y - p1.y)) / l2;
+                t = Math.max(0, Math.min(1, t));
+                return Math.hypot(p.x - (p1.x + t * (p2.x - p1.x)), p.y - (p1.y + t * (p2.y - p1.y)));
             }
 
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            const isLight = document.body.classList.contains('light-theme');
-            const wallColor = isLight ? '#d1d5db' : '#1a1a2e';
+            canvas.addEventListener("pointermove", (event) => {
+                const mousePos = planck.Vec2(event.clientX, event.clientY);
+                if (mouseJoint) {
+                    mouseJoint.setTarget(mousePos);
+                }
+            });
 
-            for (let b = world.getBodyList(); b; b = b.getNext()) {
-                const pos = b.getPosition();
-                const angle = b.getAngle();
+            window.addEventListener("pointerup", () => {
+                if (mouseJoint) {
+                    world.destroyJoint(mouseJoint);
+                    mouseJoint = null;
+                }
+            });
 
-                ctx.save();
-                ctx.translate(pos.x, pos.y);
-                ctx.rotate(angle);
+            function getPolygonVertices(radius, sides) {
+                let vertices = [];
+                for (let i = 0; i < sides; i++) {
+                    let angle = (i * 2 * Math.PI) / sides - Math.PI / 2;
+                    vertices.push(planck.Vec2(radius * Math.cos(angle), radius * Math.sin(angle)));
+                }
+                return vertices;
+            }
 
-                for (let f = b.getFixtureList(); f; f = f.getNext()) {
-                    const shape = f.getType();
-                    ctx.fillStyle = b.isWall ? wallColor : (b.renderColor || '#fff');
-                    ctx.strokeStyle = '#000';
-                    ctx.lineWidth = 1.5;
+            const blockConfigs = {
+                bass: { name: "bass", sides: 4, size: 45, color: "#ff6b81", density: 2.0, restitution: 0.15 },
+                wood: { name: "wood", sides: 5, size: 36, color: "#e67e22", density: 1.4, restitution: 0.35 },
+                mid: { name: "mid", sides: 6, size: 32, color: "#70a1ff", density: 1.0, restitution: 0.5 },
+                rubber: { name: "rubber", sides: 7, size: 28, color: "#ffa502", density: 0.7, restitution: 0.75 },
+                high: { name: "high", sides: 8, size: 26, color: "#2ed573", density: 0.45, restitution: 0.85 },
+                neon: { name: "neon", isCircle: true, radius: 24, color: "#ff00ff", density: 0.25, restitution: 0.95 },
+                poleH: {
+                    name: "pole",
+                    isRect: true,
+                    w: 180,
+                    h: 18,
+                    color: "#a4b0be",
+                    density: 1.2,
+                    restitution: 0.2,
+                    isStatic: true
+                },
+                poleV: {
+                    name: "pole",
+                    isRect: true,
+                    w: 18,
+                    h: 180,
+                    color: "#a4b0be",
+                    density: 1.2,
+                    restitution: 0.2,
+                    isStatic: true
+                }
+            };
 
-                    if (shape === 'circle') {
-                        const radius = f.getShape().m_radius;
-                        ctx.beginPath();
-                        ctx.arc(0, 0, radius, 0, Math.PI * 2);
-                        ctx.fill();
-                        ctx.stroke();
-                    } else if (shape === 'polygon') {
-                        const vertices = f.getShape().m_vertices;
-                        ctx.beginPath();
-                        for (let i = 0; i < vertices.length; i++) {
-                            const v = vertices[i];
-                            if (i === 0) ctx.moveTo(v.x, v.y);
-                            else ctx.lineTo(v.x, v.y);
+            function spawnElement(x, y, typeKey) {
+                const cfg = blockConfigs[typeKey];
+                const currentDrag = parseFloat(document.getElementById("slider-drag").value);
+
+                let body;
+                if (cfg.isStatic) {
+                    body = world.createBody({ type: "static", position: planck.Vec2(x, y) });
+                } else {
+                    body = world.createDynamicBody({ position: planck.Vec2(x, y) });
+                }
+
+                if (cfg.isCircle) {
+                    body.createFixture(planck.Circle(cfg.radius), {
+                        density: cfg.density,
+                        restitution: cfg.restitution,
+                        friction: 0.2
+                    });
+                } else if (cfg.isRect) {
+                    body.createFixture(planck.Box(cfg.w / 2, cfg.h / 2), {
+                        density: cfg.density,
+                        restitution: cfg.restitution,
+                        friction: 0.2
+                    });
+                } else if (cfg.sides === 4) {
+                    body.createFixture(planck.Box(cfg.size, cfg.size), {
+                        density: cfg.density,
+                        restitution: cfg.restitution,
+                        friction: 0.2
+                    });
+                } else {
+                    const verts = getPolygonVertices(cfg.size, cfg.sides);
+                    body.createFixture(planck.Polygon(verts), {
+                        density: cfg.density,
+                        restitution: cfg.restitution,
+                        friction: 0.2
+                    });
+                }
+
+                body.setLinearDamping(currentDrag);
+                body.soundType = cfg.name;
+                body.renderColor = cfg.color;
+            }
+
+            world.on("begin-contact", (contact) => {
+                const fixtureA = contact.getFixtureA();
+                const fixtureB = contact.getFixtureB();
+                const bodyA = fixtureA.getBody();
+                const bodyB = fixtureB.getBody();
+
+                if (bodyA.soundType && bodyB.soundType) {
+                    const velA = bodyA.getLinearVelocity();
+                    const velB = bodyB.getLinearVelocity();
+                    const relativeVel = Math.hypot(velA.x - velB.x, velA.y - velB.y);
+                    if (relativeVel > 0.8) {
+                        playMixedSound(bodyA.soundType, bodyB.soundType, relativeVel);
+                    }
+                }
+            });
+
+            function triggerDecay() {
+                for (let b = world.getBodyList(); b; b = b.getNext()) {
+                    if (b.isStatic() || b.isWall) continue;
+                    b.applyForceToCenter(planck.Vec2((Math.random() - 0.5) * 4000, -6000 - Math.random() * 4000), true);
+                    b.setAngularVelocity((Math.random() - 0.5) * 10);
+                }
+
+                if (audioCtx.state === "suspended") audioCtx.resume();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = "sine";
+                osc.frequency.setValueAtTime(baseRoot * PHI, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(baseRoot * PHI * 2, audioCtx.currentTime + 0.6);
+                gain.gain.setValueAtTime(0.25 * masterVolume, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 1.8);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(1.8);
+            }
+
+            function clearScene() {
+                let b = world.getBodyList();
+                while (b) {
+                    let nextB = b.getNext();
+                    if (!b.isWall) {
+                        world.destroyBody(b);
+                    }
+                    b = nextB;
+                }
+                linkStartBody = null;
+                linkStartPoint = null;
+                clearScore();
+            }
+
+            let timeStep = 1 / 60;
+            let velIterations = 8;
+            let posIterations = 3;
+
+            function gameLoop() {
+                if (!isPaused) {
+                    if (windSpeed !== 0 || windTurbulence > 0) {
+                        const time = Date.now() * 0.003;
+                        for (let b = world.getBodyList(); b; b = b.getNext()) {
+                            if (!b.isStatic() && !b.isWall) {
+                                const noise =
+                                    (Math.sin(time + b.getPosition().x * 0.05) * 0.5 + Math.cos(time * 0.7) * 0.5) *
+                                    windTurbulence;
+                                const totalWindForce = (windSpeed + noise) * 300;
+                                b.applyForceToCenter(planck.Vec2(totalWindForce, 0), true);
+                            }
                         }
-                        ctx.closePath();
-                        ctx.fill();
-                        ctx.stroke();
+                    }
+                    world.step(timeStep, velIterations, posIterations);
+                }
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                const isLight = document.body.classList.contains("light-theme");
+                const wallColor = isLight ? "#d1d5db" : "#1a1a2e";
+
+                for (let b = world.getBodyList(); b; b = b.getNext()) {
+                    const pos = b.getPosition();
+                    const angle = b.getAngle();
+
+                    ctx.save();
+                    ctx.translate(pos.x, pos.y);
+                    ctx.rotate(angle);
+
+                    for (let f = b.getFixtureList(); f; f = f.getNext()) {
+                        const shape = f.getType();
+                        ctx.fillStyle = b.isWall ? wallColor : b.renderColor || "#fff";
+                        ctx.strokeStyle = "#000";
+                        ctx.lineWidth = 1.5;
+
+                        if (shape === "circle") {
+                            const radius = f.getShape().m_radius;
+                            ctx.beginPath();
+                            ctx.arc(0, 0, radius, 0, Math.PI * 2);
+                            ctx.fill();
+                            ctx.stroke();
+                        } else if (shape === "polygon") {
+                            const vertices = f.getShape().m_vertices;
+                            ctx.beginPath();
+                            for (let i = 0; i < vertices.length; i++) {
+                                const v = vertices[i];
+                                if (i === 0) ctx.moveTo(v.x, v.y);
+                                else ctx.lineTo(v.x, v.y);
+                            }
+                            ctx.closePath();
+                            ctx.fill();
+                            ctx.stroke();
+                        }
+                    }
+                    ctx.restore();
+                }
+
+                for (let j = world.getJointList(); j; j = j.getNext()) {
+                    if (typeof j.getAnchorA === "function" && typeof j.getAnchorB === "function") {
+                        const anchorA = j.getAnchorA();
+                        const anchorB = j.getAnchorB();
+                        if (anchorA && anchorB) {
+                            ctx.beginPath();
+                            ctx.moveTo(anchorA.x, anchorA.y);
+                            ctx.lineTo(anchorB.x, anchorB.y);
+                            ctx.lineWidth = j.renderWidth || 2;
+                            ctx.strokeStyle = j.renderColor || "#ff4757";
+                            ctx.stroke();
+                        }
                     }
                 }
-                ctx.restore();
-            }
 
-            for (let j = world.getJointList(); j; j = j.getNext()) {
-                if (typeof j.getAnchorA === 'function' && typeof j.getAnchorB === 'function') {
-                    const anchorA = j.getAnchorA();
-                    const anchorB = j.getAnchorB();
-                    if (anchorA && anchorB) {
-                        ctx.beginPath();
-                        ctx.moveTo(anchorA.x, anchorA.y);
-                        ctx.lineTo(anchorB.x, anchorB.y);
-                        ctx.lineWidth = j.renderWidth || 2;
-                        ctx.strokeStyle = j.renderColor || '#ff4757';
-                        ctx.stroke();
-                    }
+                if (linkStartBody && linkStartPoint) {
+                    const absPoint = linkStartBody.getWorldPoint(linkStartPoint);
+                    ctx.beginPath();
+                    ctx.arc(absPoint.x, absPoint.y, 6, 0, 2 * Math.PI);
+                    ctx.fillStyle =
+                        currentMode === "rope" ? "#ff4757" : currentMode === "chain" ? "#a4b0be" : "#ffa502";
+                    ctx.fill();
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = "#ffffff";
+                    ctx.stroke();
                 }
-            }
 
-            if (linkStartBody && linkStartPoint) {
-                const absPoint = linkStartBody.getWorldPoint(linkStartPoint);
-                ctx.beginPath();
-                ctx.arc(absPoint.x, absPoint.y, 6, 0, 2 * Math.PI);
-                ctx.fillStyle = currentMode === 'rope' ? '#ff4757' : (currentMode === 'chain' ? '#a4b0be' : '#ffa502');
-                ctx.fill();
-                ctx.lineWidth = 2;
-                ctx.strokeStyle = '#ffffff';
-                ctx.stroke();
+                requestAnimationFrame(gameLoop);
             }
 
             requestAnimationFrame(gameLoop);
-        }
-
-        requestAnimationFrame(gameLoop);
-    </script>
-</body>
+        </script>
+    </body>
 </html>
