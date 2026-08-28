@@ -36,7 +36,7 @@
                 padding: 0;
                 background: var(--bg-color);
                 color: var(--text-color);
-                font-family: "Courier New", Courier, monospace;
+                font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
                 overflow: hidden;
                 display: flex;
                 flex-direction: column;
@@ -54,6 +54,17 @@
                 left: 0;
                 width: 100%;
                 height: 100%;
+                z-index: 1;
+            }
+
+            #bg-canvas {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: 0;
+                pointer-events: none;
             }
 
             #ui {
@@ -61,37 +72,37 @@
                 top: 10px;
                 left: 10px;
                 background: var(--ui-bg);
-                padding: 10px 12px;
+                padding: 12px 16px;
                 border-radius: 10px;
                 border: 1px solid var(--primary-border);
                 pointer-events: none;
                 backdrop-filter: blur(8px);
-                max-width: 240px;
+                max-width: 280px;
                 box-shadow: 0 0 20px rgba(255, 0, 85, 0.2);
                 z-index: 10;
             }
             h1 {
-                margin: 0 0 4px 0;
-                font-size: 14px;
+                margin: 0 0 6px 0;
+                font-size: 16px;
                 color: #ff0055;
                 text-transform: uppercase;
                 letter-spacing: 1px;
+                font-weight: 700;
             }
             p {
                 margin: 0 0 6px 0;
-                font-size: 10px;
-                line-height: 1.2;
+                font-size: 12px;
+                line-height: 1.3;
                 color: var(--text-color);
-                opacity: 0.8;
+                opacity: 0.9;
             }
             #score-box {
-                margin-top: 4px;
+                margin-top: 6px;
                 font-weight: bold;
                 color: var(--text-color);
-                font-size: 12px;
+                font-size: 14px;
             }
 
-            /* Floating Menu Toggle for Mobile */
             #toolbox-toggle {
                 display: none;
                 position: absolute;
@@ -104,7 +115,7 @@
                 border-radius: 10px;
                 font-family: inherit;
                 font-weight: bold;
-                font-size: 12px;
+                font-size: 13px;
                 cursor: pointer;
                 z-index: 20;
                 backdrop-filter: blur(8px);
@@ -115,16 +126,16 @@
                 top: 10px;
                 right: 10px;
                 background: var(--toolbox-bg);
-                padding: 10px;
+                padding: 12px;
                 border-radius: 12px;
                 border: 1px solid var(--border-color);
                 display: flex;
                 flex-direction: column;
-                gap: 6px;
+                gap: 8px;
                 backdrop-filter: blur(8px);
                 z-index: 15;
-                width: 260px;
-                max-height: calc(100vh - 80px);
+                width: 280px;
+                max-height: calc(100vh - 30px);
                 overflow-y: auto;
                 transition:
                     transform 0.3s ease,
@@ -134,12 +145,13 @@
             .tool-group {
                 display: flex;
                 flex-direction: column;
-                gap: 4px;
+                gap: 6px;
             }
             .tool-group label {
-                font-size: 10px;
+                font-size: 11px;
+                font-weight: 600;
                 color: var(--text-color);
-                opacity: 0.7;
+                opacity: 0.85;
                 text-transform: uppercase;
                 display: flex;
                 justify-content: space-between;
@@ -149,19 +161,20 @@
             .block-selector {
                 display: grid;
                 grid-template-columns: repeat(3, 1fr);
-                gap: 4px;
+                gap: 5px;
             }
             .block-btn {
                 background: var(--btn-bg);
                 border: 2px solid var(--border-color);
                 color: var(--text-color);
-                padding: 6px 2px;
-                font-size: 9px;
+                padding: 8px 4px;
+                font-size: 11px;
                 font-family: inherit;
                 cursor: pointer;
                 border-radius: 5px;
                 text-align: center;
                 transition: 0.2s;
+                font-weight: 600;
             }
             .block-btn.active {
                 border-color: #ff0055;
@@ -195,21 +208,21 @@
             .special-tools {
                 display: grid;
                 grid-template-columns: repeat(2, 1fr);
-                gap: 4px;
+                gap: 5px;
                 margin-top: 2px;
             }
             .special-btn {
                 background: var(--btn-bg);
                 border: 2px solid var(--border-color);
                 color: var(--text-color);
-                padding: 8px 4px;
-                font-size: 9px;
+                padding: 8px 6px;
+                font-size: 11px;
                 font-family: inherit;
                 cursor: pointer;
                 border-radius: 6px;
                 text-align: center;
                 transition: 0.2s;
-                font-weight: bold;
+                font-weight: 600;
             }
             .special-btn.active {
                 border-color: #ffa502;
@@ -222,14 +235,23 @@
                 color: #ff4757;
             }
 
-            input[type="range"] {
+            input[type="range"],
+            input[type="number"] {
                 width: 100%;
                 accent-color: #ff0055;
                 cursor: pointer;
-                height: 4px;
+            }
+            input[type="number"] {
+                background: var(--btn-bg);
+                border: 1px solid var(--border-color);
+                color: var(--text-color);
+                padding: 4px;
+                border-radius: 4px;
+                font-family: inherit;
             }
             .slider-val {
                 color: #ff0055;
+                font-weight: bold;
             }
             .mixer-grid {
                 display: grid;
@@ -238,49 +260,47 @@
             }
             .mixer-item {
                 background: rgba(128, 128, 128, 0.1);
-                padding: 4px 8px;
+                padding: 6px 8px;
                 border-radius: 4px;
+            }
+            .mixer-item label {
+                font-size: 10px;
             }
 
             .sub-btn {
                 background: var(--sub-btn-bg);
                 border: 1px solid var(--border-color);
                 color: var(--text-color);
-                font-size: 9px;
-                padding: 4px 8px;
+                font-size: 11px;
+                padding: 5px 10px;
                 border-radius: 4px;
                 cursor: pointer;
                 font-family: inherit;
+                font-weight: 600;
                 transition: 0.2s;
             }
             .sub-btn:hover {
                 opacity: 0.8;
             }
 
-            #controls {
-                position: absolute;
-                bottom: 15px;
-                display: flex;
-                gap: 8px;
-                pointer-events: auto;
-                background: var(--ui-bg);
-                padding: 8px 12px;
-                border-radius: 10px;
-                border: 1px solid var(--border-color);
-                backdrop-filter: blur(5px);
-                z-index: 10;
+            .menu-controls {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 6px;
+                margin-bottom: 4px;
             }
             button.action-btn {
                 background: var(--btn-bg);
                 color: var(--text-color);
                 border: 1px solid var(--border-color);
-                padding: 8px 12px;
+                padding: 10px 10px;
                 font-family: inherit;
                 cursor: pointer;
                 transition: 0.2s;
-                border-radius: 6px;
+                border-radius: 8px;
                 font-weight: bold;
-                font-size: 10px;
+                font-size: 11px;
+                text-align: center;
             }
             button.action-btn:hover {
                 background: var(--btn-hover);
@@ -291,12 +311,29 @@
                 color: #fff;
                 border-color: #ff0055;
                 box-shadow: 0 0 10px rgba(255, 0, 85, 0.4);
+                grid-column: span 2;
             }
             button.primary:hover {
                 background: #ff3366;
             }
 
-            /* Responsive Mobile Styles */
+            button.action-btn#btn-pause-play {
+                background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+                color: #ffffff;
+                border: 1px solid #60a5fa;
+                padding: 10px 12px;
+                font-size: 12px;
+                border-radius: 8px;
+                box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
+                transition: all 0.2s ease;
+            }
+            button.action-btn#btn-pause-play:hover {
+                background: linear-gradient(135deg, #60a5fa, #2563eb);
+                border-color: #93c5fd;
+                box-shadow: 0 0 15px rgba(59, 130, 246, 0.7);
+                transform: scale(1.02);
+            }
+
             @media (max-width: 768px) {
                 #toolbox-toggle {
                     display: block;
@@ -313,28 +350,20 @@
                     max-width: 320px;
                 }
                 #ui {
-                    max-width: 180px;
-                    padding: 8px;
+                    max-width: 200px;
+                    padding: 10px;
                 }
                 h1 {
-                    font-size: 12px;
+                    font-size: 14px;
                 }
                 p {
-                    font-size: 9px;
-                }
-                #controls {
-                    bottom: 10px;
-                    padding: 6px;
-                    gap: 6px;
-                }
-                button.action-btn {
-                    padding: 6px 10px;
-                    font-size: 9px;
+                    font-size: 11px;
                 }
             }
         </style>
     </head>
     <body>
+        <canvas id="bg-canvas"></canvas>
         <canvas id="game-canvas"></canvas>
 
         <button id="toolbox-toggle" onclick="toggleToolbox(event)">⚙️ Menu</button>
@@ -346,11 +375,17 @@
         </div>
 
         <div id="toolbox" class="collapsed">
+            <div class="menu-controls">
+                <button class="action-btn" onclick="clearScene()">🧹 Pulisci</button>
+                <button class="action-btn" id="btn-pause-play" onclick="togglePause()">⏸️ Pausa</button>
+                <button class="action-btn primary" onclick="triggerDecay()">⚡ GLITCH</button>
+            </div>
+
             <div class="tool-group">
                 <label
                     >Seleziona Oggetto:
-                    <button class="sub-btn" id="theme-toggle" onclick="toggleTheme()">🌓 Tema</button></label
-                >
+                    <button class="sub-btn" id="theme-toggle" onclick="toggleTheme()">🌓 Tema</button>
+                </label>
                 <div class="block-selector">
                     <button class="block-btn active" id="btn-bass" onclick="selectBlock('bass')">Orolite</button>
                     <button class="block-btn" id="btn-wood" onclick="selectBlock('wood')">Pentacore</button>
@@ -373,7 +408,19 @@
                 </div>
             </div>
 
-            <div class="tool-group" style="background: rgba(255, 0, 85, 0.05); padding: 4px; border-radius: 6px">
+            <!-- Nuovo campo per decidere il numero di alberi -->
+            <div class="tool-group">
+                <label>Numero Alberi Sfondo: <span id="val-trees-count" class="slider-val">12</span></label>
+                <input
+                    type="number"
+                    id="input-trees-count"
+                    min="1"
+                    max="300"
+                    value="30"
+                    onchange="updateTreesCount()" />
+            </div>
+
+            <div class="tool-group" style="background: rgba(255, 0, 85, 0.05); padding: 6px; border-radius: 6px">
                 <label>Corda/Catena - Segmenti: <span id="val-rope-seg" class="slider-val">12</span></label>
                 <input
                     type="range"
@@ -449,8 +496,8 @@
             <div class="tool-group" style="margin-top: 4px">
                 <label>Mixer Volumi: <button class="sub-btn" onclick="resetMixer()">Reset</button></label>
                 <div class="mixer-item" style="margin-bottom: 6px">
-                    <label>Master Generale</label
-                    ><input
+                    <label>Master Generale</label>
+                    <input
                         type="range"
                         id="vol-master"
                         min="0"
@@ -530,26 +577,18 @@
             </div>
         </div>
 
-        <div id="controls">
-            <button class="action-btn" onclick="clearScene()">🧹 Pulisci</button>
-            <button class="action-btn" id="btn-pause-play" onclick="togglePause()">⏸️ Pausa</button>
-            <button class="action-btn primary" onclick="triggerDecay()">⚡ GLITCH</button>
-        </div>
-
         <script src="https://cdn.jsdelivr.net/npm/planck-js/dist/planck.min.js"></script>
 
         <script>
             const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
-            // Costanti armoniche basate su Pi Greco e Rapporto Aureo (Phi)
             const PI = Math.PI;
-            const PHI = (1 + Math.sqrt(5)) / 2; // ~1.61803398875
+            const PHI = (1 + Math.sqrt(5)) / 2;
 
-            // Scale calcolate con proporzioni auree e circolarità armonica (più dolci e rilassanti)
-            const baseRoot = 110.0; // La2 come fondazione chill
+            const baseRoot = 110.0;
             const scales = {
-                bass: [baseRoot, baseRoot * 1.5, baseRoot * 2], // fondamentale, quinta, ottava
-                wood: [baseRoot * 1.25, baseRoot * 1.5, baseRoot * 2], // terza maggiore, quinta, ottava
+                bass: [baseRoot, baseRoot * 1.5, baseRoot * 2],
+                wood: [baseRoot * 1.25, baseRoot * 1.5, baseRoot * 2],
                 mid: [baseRoot * 2, baseRoot * 2.5, baseRoot * 3, baseRoot * 4],
                 rubber: [baseRoot * 3, baseRoot * 3.75, baseRoot * 4.5],
                 high: [baseRoot * 4, baseRoot * 5, baseRoot * 6, baseRoot * 8],
@@ -588,7 +627,6 @@
                 const primaryType = typeA;
                 const secondaryType = typeB && typeB !== typeA ? typeB : null;
 
-                // Sintesi ultra-morbida e calda per evitare clipping: filtri passa-basso stretti, gain controllati e inviluppi esponenziali fluidi
                 const scale1 = scales[primaryType] || scales.pole;
                 const freq1 = scale1[Math.floor(Math.random() * scale1.length)];
 
@@ -597,9 +635,8 @@
                 const gain1 = audioCtx.createGain();
                 const filter1 = audioCtx.createBiquadFilter();
 
-                osc1.type = "sine"; // Usiamo 'sine' per un suono più dolce e rotondo
+                osc1.type = "sine";
                 osc1.frequency.setValueAtTime(freq1, now);
-
                 oscSub.type = "sine";
                 oscSub.frequency.setValueAtTime(freq1 * 0.5, now);
 
@@ -627,14 +664,12 @@
                 if (secondaryType) {
                     const scale2 = scales[secondaryType] || scales.pole;
                     const freq2 = scale2[Math.floor(Math.random() * scale2.length)];
-
                     const osc2 = audioCtx.createOscillator();
                     const gain2 = audioCtx.createGain();
                     const filter2 = audioCtx.createBiquadFilter();
 
                     osc2.type = "sine";
                     osc2.frequency.setValueAtTime(freq2 / 2, now);
-
                     filter2.type = "lowpass";
                     filter2.frequency.setValueAtTime(1400, now);
 
@@ -679,14 +714,12 @@
 
             function toggleToolbox(event) {
                 if (event) event.stopPropagation();
-                const tb = document.getElementById("toolbox");
-                tb.classList.toggle("collapsed");
+                document.getElementById("toolbox").classList.toggle("collapsed");
             }
 
             function updateRopeProps() {
                 const segVal = document.getElementById("slider-rope-seg").value;
                 const stiffVal = parseFloat(document.getElementById("slider-rope-stiff").value);
-
                 document.getElementById("val-rope-seg").innerText = segVal;
                 document.getElementById("val-rope-stiff").innerText = stiffVal;
 
@@ -764,12 +797,12 @@
                 }
             }
 
-            const world = planck.World({
-                gravity: planck.Vec2(0, 20.0)
-            });
+            const world = planck.World({ gravity: planck.Vec2(0, 20.0) });
 
             const canvas = document.getElementById("game-canvas");
             const ctx = canvas.getContext("2d");
+            const bgCanvas = document.getElementById("bg-canvas");
+            const bgCtx = bgCanvas.getContext("2d");
 
             const wallThickness = 40;
             const ground = world.createBody({
@@ -811,6 +844,8 @@
             function resizeCanvas() {
                 canvas.width = window.innerWidth;
                 canvas.height = window.innerHeight;
+                bgCanvas.width = window.innerWidth;
+                bgCanvas.height = window.innerHeight;
 
                 if (ground && wallLeft && wallRight && ceiling) {
                     ground.setPosition(planck.Vec2(window.innerWidth / 2, window.innerHeight - 20));
@@ -837,9 +872,9 @@
                         friction: 0.3
                     });
                 }
+                initBackgroundTrees();
             }
             window.addEventListener("resize", resizeCanvas);
-            resizeCanvas();
 
             let windSpeed = 0.0;
             let windTurbulence = 0.0;
@@ -858,9 +893,7 @@
                 world.setGravity(planck.Vec2(0, gravVal));
 
                 for (let b = world.getBodyList(); b; b = b.getNext()) {
-                    if (!b.isStatic() && !b.isWall) {
-                        b.setLinearDamping(dragVal);
-                    }
+                    if (!b.isStatic() && !b.isWall) b.setLinearDamping(dragVal);
                 }
             }
 
@@ -879,20 +912,18 @@
                 const clientX = event.clientX;
                 const clientY = event.clientY;
 
-                if (clientX < 260 && clientY < 200) return;
-                if (clientX > window.innerWidth - 280 && clientY < 60) return;
+                if (clientX < 280 && clientY < 200) return;
+                if (clientX > window.innerWidth - 300 && clientY < 60) return;
 
                 const toolbox = document.getElementById("toolbox");
                 if (
                     !toolbox.classList.contains("collapsed") &&
-                    clientX > window.innerWidth - 300 &&
+                    clientX > window.innerWidth - 320 &&
                     clientY < window.innerHeight
-                ) {
+                )
                     return;
-                }
 
                 const mousePos = planck.Vec2(clientX, clientY);
-
                 let clickedBody = null;
                 for (let b = world.getBodyList(); b; b = b.getNext()) {
                     if (b.isWall) continue;
@@ -947,16 +978,12 @@
                         if (typeof j.getAnchorA === "function" && typeof j.getAnchorB === "function") {
                             const aA = j.getAnchorA();
                             const aB = j.getAnchorB();
-                            if (aA && aB) {
-                                const dist = distToSegment(mousePos, aA, aB);
-                                if (dist < 15) {
-                                    clickedJoint = j;
-                                    break;
-                                }
+                            if (aA && aB && distToSegment(mousePos, aA, aB) < 15) {
+                                clickedJoint = j;
+                                break;
                             }
                         }
                     }
-
                     if (clickedJoint) {
                         if (clickedJoint.ropeId !== undefined) {
                             const rId = clickedJoint.ropeId;
@@ -994,9 +1021,7 @@
                             let j = world.getJointList();
                             while (j) {
                                 let nextJ = j.getNext();
-                                if (j.getBodyA() === clickedBody || j.getBodyB() === clickedBody) {
-                                    world.destroyJoint(j);
-                                }
+                                if (j.getBodyA() === clickedBody || j.getBodyB() === clickedBody) world.destroyJoint(j);
                                 j = nextJ;
                             }
                             world.destroyBody(clickedBody);
@@ -1009,6 +1034,19 @@
                             linkStartBody = clickedBody;
                             linkStartPoint = localPoint;
                         } else {
+                            // Se clicchiamo esattamente sullo stesso punto iniziale, annulliamo la selezione del punto
+                            if (
+                                linkStartBody === clickedBody &&
+                                planck.Vec2.distance(
+                                    linkStartBody.getWorldPoint(linkStartPoint),
+                                    clickedBody.getWorldPoint(localPoint)
+                                ) < 10
+                            ) {
+                                linkStartBody = null;
+                                linkStartPoint = null;
+                                return;
+                            }
+
                             const posA = linkStartBody.getWorldPoint(linkStartPoint);
                             const posB = clickedBody.getWorldPoint(localPoint);
 
@@ -1031,10 +1069,8 @@
                                 ropeIdCounter++;
                                 const currentRopeId = ropeIdCounter;
                                 const numSegments = parseInt(document.getElementById("slider-rope-seg").value);
-
                                 let prevBody = linkStartBody;
                                 let prevAnchor = linkStartPoint;
-
                                 const totalDist = planck.Vec2.distance(posA, posB);
                                 const segmentLength = totalDist / numSegments;
                                 const angle = Math.atan2(posB.y - posA.y, posB.x - posA.x);
@@ -1043,7 +1079,6 @@
                                     const percent = i / numSegments;
                                     const x = posA.x + (posB.x - posA.x) * percent;
                                     const y = posA.y + (posB.y - posA.y) * percent;
-
                                     const segBody = world.createDynamicBody({
                                         position: planck.Vec2(x, y),
                                         angle: angle
@@ -1077,7 +1112,6 @@
                                     prevBody = segBody;
                                     prevAnchor = planck.Vec2(segmentLength * 0.45, 0);
                                 }
-
                                 const finalJoint = world.createJoint(
                                     planck.RevoluteJoint({
                                         bodyA: prevBody,
@@ -1100,7 +1134,6 @@
                                 const ropeStiffness = parseFloat(document.getElementById("slider-rope-stiff").value);
                                 const totalDist = planck.Vec2.distance(posA, posB);
                                 const segmentLength = totalDist / numSegments;
-
                                 let prevBody = linkStartBody;
                                 let prevAnchor = linkStartPoint;
 
@@ -1108,10 +1141,7 @@
                                     const percent = i / numSegments;
                                     const x = posA.x + (posB.x - posA.x) * percent;
                                     const y = posA.y + (posB.y - posA.y) * percent;
-
-                                    const segBody = world.createDynamicBody({
-                                        position: planck.Vec2(x, y)
-                                    });
+                                    const segBody = world.createDynamicBody({ position: planck.Vec2(x, y) });
                                     segBody.createFixture(planck.Circle(2.0), {
                                         density: 0.05,
                                         filterCategoryBits: 0x0002
@@ -1137,7 +1167,6 @@
                                     prevBody = segBody;
                                     prevAnchor = planck.Vec2(0, 0);
                                 }
-
                                 const finalJoint = world.createJoint(
                                     planck.DistanceJoint({
                                         bodyA: prevBody,
@@ -1155,7 +1184,6 @@
                                 finalJoint.renderColor = "#ff4757";
                                 finalJoint.renderWidth = 2;
                             }
-
                             linkStartBody = null;
                             linkStartPoint = null;
                         }
@@ -1173,9 +1201,7 @@
 
             canvas.addEventListener("pointermove", (event) => {
                 const mousePos = planck.Vec2(event.clientX, event.clientY);
-                if (mouseJoint) {
-                    mouseJoint.setTarget(mousePos);
-                }
+                if (mouseJoint) mouseJoint.setTarget(mousePos);
             });
 
             window.addEventListener("pointerup", () => {
@@ -1226,13 +1252,9 @@
             function spawnElement(x, y, typeKey) {
                 const cfg = blockConfigs[typeKey];
                 const currentDrag = parseFloat(document.getElementById("slider-drag").value);
-
-                let body;
-                if (cfg.isStatic) {
-                    body = world.createBody({ type: "static", position: planck.Vec2(x, y) });
-                } else {
-                    body = world.createDynamicBody({ position: planck.Vec2(x, y) });
-                }
+                let body = cfg.isStatic
+                    ? world.createBody({ type: "static", position: planck.Vec2(x, y) })
+                    : world.createDynamicBody({ position: planck.Vec2(x, y) });
 
                 if (cfg.isCircle) {
                     body.createFixture(planck.Circle(cfg.radius), {
@@ -1267,18 +1289,13 @@
             }
 
             world.on("begin-contact", (contact) => {
-                const fixtureA = contact.getFixtureA();
-                const fixtureB = contact.getFixtureB();
-                const bodyA = fixtureA.getBody();
-                const bodyB = fixtureB.getBody();
-
+                const bodyA = contact.getFixtureA().getBody();
+                const bodyB = contact.getFixtureB().getBody();
                 if (bodyA.soundType && bodyB.soundType) {
                     const velA = bodyA.getLinearVelocity();
                     const velB = bodyB.getLinearVelocity();
                     const relativeVel = Math.hypot(velA.x - velB.x, velA.y - velB.y);
-                    if (relativeVel > 0.8) {
-                        playMixedSound(bodyA.soundType, bodyB.soundType, relativeVel);
-                    }
+                    if (relativeVel > 0.8) playMixedSound(bodyA.soundType, bodyB.soundType, relativeVel);
                 }
             });
 
@@ -1288,7 +1305,6 @@
                     b.applyForceToCenter(planck.Vec2((Math.random() - 0.5) * 4000, -6000 - Math.random() * 4000), true);
                     b.setAngularVelocity((Math.random() - 0.5) * 10);
                 }
-
                 if (audioCtx.state === "suspended") audioCtx.resume();
                 const osc = audioCtx.createOscillator();
                 const gain = audioCtx.createGain();
@@ -1307,9 +1323,7 @@
                 let b = world.getBodyList();
                 while (b) {
                     let nextB = b.getNext();
-                    if (!b.isWall) {
-                        world.destroyBody(b);
-                    }
+                    if (!b.isWall) world.destroyBody(b);
                     b = nextB;
                 }
                 linkStartBody = null;
@@ -1320,6 +1334,333 @@
             let timeStep = 1 / 60;
             let velIterations = 8;
             let posIterations = 3;
+
+            // --- FRACTAL TREES INTEGRATION ---
+            let backgroundTrees = [];
+            let maxDepth = 6;
+            let baseSpread = 0.45;
+
+            function seededRandom(s) {
+                let seed = s;
+                return function () {
+                    seed = (seed * 16807) % 2147483647;
+                    return (seed - 1) / 2147483646;
+                };
+            }
+
+            function createFractalTree(worldX, groundY, scale, seedVal) {
+                const trunkLen = 110 * scale;
+                const tree = {
+                    worldX,
+                    groundY,
+                    scale,
+                    trunkLen,
+                    branchCount: 0,
+                    bX1: null,
+                    bY1: null,
+                    bLength: null,
+                    bAngle: null,
+                    bDepthArr: null,
+                    bDepthRatio: null,
+                    bParent: null,
+                    bRandFactor: null,
+                    bThickness: null,
+                    bIsTerminal: null,
+                    pX1: null,
+                    pY1: null,
+                    pX2: null,
+                    pY2: null,
+                    pGrow: null,
+                    pValid: null
+                };
+
+                let rand = seededRandom(seedVal);
+                const tmp = [];
+
+                function recurse(x, y, angle, length, depth, parentIndex) {
+                    if (depth > maxDepth || length < 6 * scale) return;
+                    const endX = x + Math.sin(angle) * length;
+                    const endY = y - Math.cos(angle) * length;
+                    const idx = tmp.length / 9;
+                    const dr = depth / maxDepth;
+                    const randAngle = (rand() - 0.5) * 0.3;
+                    const randLen = 0.58 + rand() * 0.12;
+                    const rf = rand();
+
+                    tmp.push(
+                        x,
+                        y,
+                        length,
+                        angle,
+                        depth,
+                        dr,
+                        parentIndex,
+                        rf,
+                        Math.max(0.5, (maxDepth - depth) * 1.1 * scale + 0.4)
+                    );
+
+                    const spread = baseSpread * (0.8 + rand() * 0.4);
+                    const nextLen = length * randLen;
+                    recurse(endX, endY, angle - spread + randAngle, nextLen, depth + 1, idx);
+                    recurse(endX, endY, angle + spread + randAngle, nextLen, depth + 1, idx);
+                }
+
+                recurse(worldX, groundY, 0, trunkLen, 0, -1);
+
+                const n = tmp.length / 9;
+                tree.branchCount = n;
+                tree.bX1 = new Float64Array(n);
+                tree.bY1 = new Float64Array(n);
+                tree.bLength = new Float64Array(n);
+                tree.bAngle = new Float64Array(n);
+                tree.bDepthArr = new Uint16Array(n);
+                tree.bDepthRatio = new Float32Array(n);
+                tree.bParent = new Int32Array(n);
+                tree.bRandFactor = new Float32Array(n);
+                tree.bThickness = new Float32Array(n);
+                tree.bIsTerminal = new Uint8Array(n);
+                tree.pX1 = new Float64Array(n);
+                tree.pY1 = new Float64Array(n);
+                tree.pX2 = new Float64Array(n);
+                tree.pY2 = new Float64Array(n);
+                tree.pValid = new Uint8Array(n);
+
+                for (let i = 0; i < n; i++) {
+                    const o = i * 9;
+                    tree.bX1[i] = tmp[o];
+                    tree.bY1[i] = tmp[o + 1];
+                    tree.bLength[i] = tmp[o + 2];
+                    tree.bAngle[i] = tmp[o + 3];
+                    tree.bDepthArr[i] = tmp[o + 4];
+                    tree.bDepthRatio[i] = tmp[o + 5];
+                    tree.bParent[i] = tmp[o + 6];
+                    tree.bRandFactor[i] = tmp[o + 7];
+                    tree.bThickness[i] = tmp[o + 8];
+                }
+
+                const hasChild = new Uint8Array(n);
+                for (let i = 0; i < n; i++) {
+                    const pi = tree.bParent[i];
+                    if (pi >= 0) hasChild[pi] = 1;
+                }
+                for (let i = 0; i < n; i++) {
+                    if (!hasChild[i]) tree.bIsTerminal[i] = 1;
+                }
+                return tree;
+            }
+
+            function updateTreesCount() {
+                const countInput = parseInt(document.getElementById("input-trees-count").value) || 12;
+                document.getElementById("val-trees-count").innerText = countInput;
+                initCustomBackgroundTrees(countInput);
+            }
+
+            function initCustomBackgroundTrees(count) {
+                backgroundTrees = [];
+                const w = window.innerWidth;
+                const h = window.innerHeight;
+                for (let i = 0; i < count; i++) {
+                    const posX = w * ((i + 0.5) / count) + (Math.random() - 0.5) * 40;
+                    const scaleVal = 0.5 + Math.random() * 0.7;
+                    const seedVal = 100 + i * 37;
+                    const groundY = h * (0.68 + Math.random() * 0.08);
+                    backgroundTrees.push(createFractalTree(posX, groundY, scaleVal, seedVal));
+                }
+            }
+
+            function initBackgroundTrees() {
+                const countInput = parseInt(document.getElementById("input-trees-count")?.value) || 12;
+                initCustomBackgroundTrees(countInput);
+            }
+            initBackgroundTrees();
+
+            let fallingLeaves = [];
+            for (let i = 0; i < 90; i++) {
+                fallingLeaves.push({
+                    x: Math.random() * window.innerWidth,
+                    y: Math.random() * window.innerHeight,
+                    size: Math.random() * 7 + 3,
+                    speedY: Math.random() * 0.9 + 0.4,
+                    angle: Math.random() * Math.PI * 2,
+                    spin: (Math.random() - 0.5) * 0.03
+                });
+            }
+
+            function drawJapaneseBackground() {
+                const isLight = document.body.classList.contains("light-theme");
+                bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+
+                const w = bgCanvas.width;
+                const h = bgCanvas.height;
+
+                let skyGrad = bgCtx.createLinearGradient(0, 0, 0, h);
+                if (isLight) {
+                    skyGrad.addColorStop(0, "#ffd1dc");
+                    skyGrad.addColorStop(0.5, "#e0f2fe");
+                    skyGrad.addColorStop(1, "#f1f5f9");
+                } else {
+                    skyGrad.addColorStop(0, "#1e1b4b");
+                    skyGrad.addColorStop(0.5, "#311030");
+                    skyGrad.addColorStop(1, "#0f172a");
+                }
+                bgCtx.fillStyle = skyGrad;
+                bgCtx.fillRect(0, 0, w, h);
+
+                bgCtx.fillStyle = isLight ? "rgba(251, 191, 36, 0.3)" : "rgba(244, 114, 182, 0.15)";
+                bgCtx.beginPath();
+                bgCtx.arc(w * 0.8, h * 0.25, 70, 0, Math.PI * 2);
+                bgCtx.fill();
+
+                bgCtx.fillStyle = isLight ? "rgba(148, 163, 184, 0.4)" : "rgba(30, 41, 59, 0.6)";
+                bgCtx.beginPath();
+                bgCtx.moveTo(0, h * 0.65);
+                bgCtx.lineTo(w * 0.2, h * 0.45);
+                bgCtx.lineTo(w * 0.5, h * 0.6);
+                bgCtx.lineTo(w * 0.75, h * 0.4);
+                bgCtx.lineTo(w, h * 0.55);
+                bgCtx.lineTo(w, h);
+                bgCtx.lineTo(0, h);
+                bgCtx.closePath();
+                bgCtx.fill();
+
+                bgCtx.fillStyle = isLight ? "rgba(100, 116, 139, 0.6)" : "rgba(15, 23, 42, 0.85)";
+                bgCtx.beginPath();
+                bgCtx.moveTo(0, h * 0.75);
+                bgCtx.lineTo(w * 0.35, h * 0.55);
+                bgCtx.lineTo(w * 0.6, h * 0.68);
+                bgCtx.lineTo(w * 0.85, h * 0.52);
+                bgCtx.lineTo(w, h * 0.62);
+                bgCtx.lineTo(w, h);
+                bgCtx.lineTo(0, h);
+                bgCtx.closePath();
+                bgCtx.fill();
+
+                function drawPagoda(pX, pY) {
+                    bgCtx.fillStyle = isLight ? "#475569" : "#090d16";
+                    bgCtx.fillRect(pX - 16, pY - 25, 32, 25);
+                    bgCtx.beginPath();
+                    bgCtx.moveTo(pX - 35, pY);
+                    bgCtx.lineTo(pX + 35, pY);
+                    bgCtx.lineTo(pX + 25, pY - 12);
+                    bgCtx.lineTo(pX - 25, pY - 12);
+                    bgCtx.closePath();
+                    bgCtx.fill();
+                    bgCtx.fillRect(pX - 12, pY - 37, 24, 12);
+                    bgCtx.beginPath();
+                    bgCtx.moveTo(pX - 25, pY - 25);
+                    bgCtx.lineTo(pX + 25, pY - 25);
+                    bgCtx.lineTo(pX + 18, pY - 35);
+                    bgCtx.lineTo(pX - 18, pY - 35);
+                    bgCtx.closePath();
+                    bgCtx.fill();
+                    bgCtx.beginPath();
+                    bgCtx.moveTo(pX - 16, pY - 45);
+                    bgCtx.lineTo(pX + 16, pY - 45);
+                    bgCtx.lineTo(pX + 10, pY - 52);
+                    bgCtx.lineTo(pX - 10, pY - 52);
+                    bgCtx.closePath();
+                    bgCtx.fill();
+                    bgCtx.fillRect(pX - 1.5, pY - 64, 3, 12);
+                }
+                drawPagoda(w * 0.72, h * 0.57);
+                drawPagoda(w * 0.38, h * 0.61);
+
+                const time = Date.now() * 0.003;
+                const effectiveWind = windSpeed + Math.sin(time) * windTurbulence;
+
+                backgroundTrees.forEach((t) => {
+                    const n = t.branchCount;
+                    const gw = effectiveWind * 0.1;
+
+                    for (let i = 0; i < n; i++) {
+                        const pi = t.bParent[i];
+                        let x1, y1;
+                        if (pi === -1) {
+                            x1 = t.bX1[i];
+                            y1 = t.bY1[i];
+                        } else {
+                            if (!t.pValid[pi]) {
+                                t.pValid[i] = 0;
+                                continue;
+                            }
+                            x1 = t.pX2[pi];
+                            y1 = t.pY2[pi];
+                        }
+
+                        const dr = t.bDepthRatio ? t.bDepthRatio[i] : t.bDepthArr[i] / maxDepth;
+                        const rf = t.bRandFactor[i];
+                        const d = t.bDepthArr[i];
+                        const wind = gw * (0.2 + dr * 0.8) + Math.sin(time * 0.003 + rf * 20 + d) * 0.08 * dr;
+                        const a = t.bAngle[i] + wind;
+                        const len = t.bLength[i];
+
+                        t.pX1[i] = x1;
+                        t.pY1[i] = y1;
+                        t.pX2[i] = x1 + Math.sin(a) * len;
+                        t.pY2[i] = y1 - Math.cos(a) * len;
+                        t.pValid[i] = 1;
+                    }
+
+                    bgCtx.lineCap = "round";
+                    let prevW = -1,
+                        pathStarted = false;
+                    for (let i = 0; i < n; i++) {
+                        if (!t.pValid[i]) continue;
+                        const wthick = (t.bThickness[i] + 0.5) | 0;
+                        if (wthick !== prevW) {
+                            if (pathStarted) bgCtx.stroke();
+                            bgCtx.beginPath();
+                            bgCtx.lineWidth = wthick;
+                            bgCtx.strokeStyle = isLight
+                                ? t.scale < 0.8
+                                    ? "#94a3b8"
+                                    : "#334155"
+                                : t.scale < 0.8
+                                  ? "#1e293b"
+                                  : "#0f172a";
+                            prevW = wthick;
+                            pathStarted = true;
+                        }
+                        bgCtx.moveTo(t.pX1[i], t.pY1[i]);
+                        bgCtx.lineTo(t.pX2[i], t.pY2[i]);
+                    }
+                    if (pathStarted) bgCtx.stroke();
+
+                    bgCtx.fillStyle = isLight ? "rgba(244, 114, 182, 0.85)" : "rgba(244, 114, 182, 0.7)";
+                    bgCtx.beginPath();
+                    const dotR = Math.max(2.5, 5 * t.scale);
+                    for (let i = 0; i < n; i++) {
+                        if (!t.bIsTerminal[i] || !t.pValid[i]) continue;
+                        bgCtx.moveTo(t.pX2[i] + dotR, t.pY2[i]);
+                        bgCtx.arc(t.pX2[i], t.pY2[i], dotR, 0, Math.PI * 2);
+                        bgCtx.moveTo(t.pX2[i] + dotR * 0.6, t.pY2[i] - dotR * 0.5);
+                        bgCtx.arc(t.pX2[i] + dotR * 0.4, t.pY2[i] - dotR * 0.4, dotR * 0.7, 0, Math.PI * 2);
+                    }
+                    bgCtx.fill();
+                });
+
+                bgCtx.fillStyle = isLight ? "#ec4899" : "#f472b6";
+                fallingLeaves.forEach((leaf) => {
+                    leaf.x += effectiveWind * 1.5 + Math.sin(leaf.angle) * 0.8;
+                    leaf.y += leaf.speedY + Math.abs(effectiveWind) * 0.1;
+                    leaf.angle += leaf.spin;
+
+                    if (leaf.x > w + 20) leaf.x = -20;
+                    if (leaf.x < -20) leaf.x = w + 20;
+                    if (leaf.y > h + 20) {
+                        leaf.y = -20;
+                        leaf.x = Math.random() * w;
+                    }
+
+                    bgCtx.save();
+                    bgCtx.translate(leaf.x, leaf.y);
+                    bgCtx.rotate(leaf.angle);
+                    bgCtx.beginPath();
+                    bgCtx.ellipse(0, 0, leaf.size, leaf.size * 0.5, 0, 0, Math.PI * 2);
+                    bgCtx.fill();
+                    bgCtx.restore();
+                });
+            }
 
             function gameLoop() {
                 if (!isPaused) {
@@ -1337,6 +1678,8 @@
                     }
                     world.step(timeStep, velIterations, posIterations);
                 }
+
+                drawJapaneseBackground();
 
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 const isLight = document.body.classList.contains("light-theme");
@@ -1383,31 +1726,36 @@
                         const anchorA = j.getAnchorA();
                         const anchorB = j.getAnchorB();
                         if (anchorA && anchorB) {
+                            ctx.save();
+                            ctx.strokeStyle = j.renderColor || (isLight ? "#6b7280" : "#a4b0be");
+                            ctx.lineWidth = j.renderWidth || 2;
                             ctx.beginPath();
                             ctx.moveTo(anchorA.x, anchorA.y);
                             ctx.lineTo(anchorB.x, anchorB.y);
-                            ctx.lineWidth = j.renderWidth || 2;
-                            ctx.strokeStyle = j.renderColor || "#ff4757";
                             ctx.stroke();
+                            ctx.restore();
                         }
                     }
                 }
 
-                if (linkStartBody && linkStartPoint) {
-                    const absPoint = linkStartBody.getWorldPoint(linkStartPoint);
+                // --- GESTIONE E DISEGNO DEL CERCHIETTO DI ANCORAGGIO ---
+                if (linkStartBody && (currentMode === "rope" || currentMode === "chain" || currentMode === "bar")) {
+                    const startWorldPoint = linkStartBody.getWorldPoint(linkStartPoint);
+                    ctx.save();
                     ctx.beginPath();
-                    ctx.arc(absPoint.x, absPoint.y, 6, 0, 2 * Math.PI);
-                    ctx.fillStyle =
-                        currentMode === "rope" ? "#ff4757" : currentMode === "chain" ? "#a4b0be" : "#ffa502";
+                    ctx.arc(startWorldPoint.x, startWorldPoint.y, 8, 0, Math.PI * 2);
+                    ctx.fillStyle = "rgba(255, 0, 85, 0.4)";
                     ctx.fill();
                     ctx.lineWidth = 2;
-                    ctx.strokeStyle = "#ffffff";
+                    ctx.strokeStyle = "#ff0055";
                     ctx.stroke();
+                    ctx.restore();
                 }
 
                 requestAnimationFrame(gameLoop);
             }
 
+            resizeCanvas();
             requestAnimationFrame(gameLoop);
         </script>
     </body>
