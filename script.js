@@ -1,0 +1,1313 @@
+const SCALE = 40.0;
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const PI = Math.PI;
+const PHI = (1 + Math.sqrt(5)) / 2;
+const baseRoot = 110.0;
+const scales = {
+    bass: [baseRoot, baseRoot * 1.5, baseRoot * 2],
+    wood: [baseRoot * 1.25, baseRoot * 1.5, baseRoot * 2],
+    mid: [baseRoot * 2, baseRoot * 2.5, baseRoot * 3, baseRoot * 4],
+    rubber: [baseRoot * 3, baseRoot * 3.75, baseRoot * 4.5],
+    high: [baseRoot * 4, baseRoot * 5, baseRoot * 6, baseRoot * 8],
+    neon: [baseRoot * 5, baseRoot * 6, baseRoot * 7.5, baseRoot * 10],
+    pole: [baseRoot * 1.5, baseRoot * 2.5]
+};
+
+const volumes = { bass: 0.8, wood: 0.8, mid: 0.8, rubber: 0.8, high: 0.8, neon: 0.8, pole: 0.8 };
+let masterVolume = 0.8;
+
+function updateVolume(type, val) {
+    volumes[type] = parseFloat(val);
+}
+function updateMasterVolume(val) {
+    masterVolume = parseFloat(val);
+}
+function resetMixer() {
+    masterVolume = 0.8;
+    document.getElementById("vol-master").value = 0.8;
+    for (let key in volumes) {
+        volumes[key] = 0.8;
+        const slider = document.getElementById("vol-" + key);
+        if (slider) slider.value = 0.8;
+    }
+}
+
+let activeSoundsCount = 0;
+const MAX_SIMULTANEOUS_SOUNDS = 12;
+
+function playMixedSound(typeA, typeB, velocity) {
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    if (activeSoundsCount >= MAX_SIMULTANEOUS_SOUNDS) return;
+    activeSoundsCount++;
+
+    const now = audioCtx.currentTime;
+    const primaryType = typeA;
+    const secondaryType = typeB && typeB !== typeA ? typeB : null;
+
+    const scale1 = scales[primaryType] || scales.pole;
+    const freq1 = scale1[Math.floor(Math.random() * scale1.length)];
+
+    const osc1 = audioCtx.createOscillator();
+    const oscSub = audioCtx.createOscillator();
+    const gain1 = audioCtx.createGain();
+    const filter1 = audioCtx.createBiquadFilter();
+
+    osc1.type = "sine";
+    osc1.frequency.setValueAtTime(freq1, now);
+    oscSub.type = "sine";
+    oscSub.frequency.setValueAtTime(freq1 * 0.5, now);
+
+    filter1.type = "lowpass";
+    filter1.frequency.setValueAtTime(Math.min(freq1 * 1.8, 1600), now);
+    filter1.Q.setValueAtTime(0.5, now);
+
+    const baseVol1 = volumes[primaryType] !== undefined ? volumes[primaryType] : 0.8;
+    const vol1 = Math.min(0.25, velocity * 0.03) * baseVol1 * masterVolume;
+
+    gain1.gain.setValueAtTime(0, now);
+    gain1.gain.linearRampToValueAtTime(vol1, now + 0.12);
+    gain1.gain.exponentialRampToValueAtTime(0.0001, now + 2.5);
+
+    osc1.connect(filter1);
+    oscSub.connect(filter1);
+    filter1.connect(gain1);
+    gain1.connect(audioCtx.destination);
+
+    osc1.start(now);
+    oscSub.start(now);
+    osc1.stop(now + 2.6);
+    oscSub.stop(now + 2.6);
+
+    if (secondaryType) {
+        const scale2 = scales[secondaryType] || scales.pole;
+        const freq2 = scale2[Math.floor(Math.random() * scale2.length)];
+        const osc2 = audioCtx.createOscillator();
+        const gain2 = audioCtx.createGain();
+        const filter2 = audioCtx.createBiquadFilter();
+
+        osc2.type = "sine";
+        osc2.frequency.setValueAtTime(freq2 / 2, now);
+        filter2.type = "lowpass";
+        filter2.frequency.setValueAtTime(1400, now);
+
+        const baseVol2 = volumes[secondaryType] !== undefined ? volumes[secondaryType] : 0.8;
+        const vol2 = vol1 * 0.35;
+
+        gain2.gain.setValueAtTime(0, now);
+        gain2.gain.linearRampToValueAtTime(vol2, now + 0.05);
+        gain2.gain.exponentialRampToValueAtTime(0.0001, now + 2.2);
+
+        osc2.connect(filter2);
+        filter2.connect(gain2);
+        gain2.connect(audioCtx.destination);
+
+        osc2.start(now);
+        osc2.stop(now + 2.3);
+    }
+
+    setTimeout(() => {
+        activeSoundsCount = Math.max(0, activeSoundsCount - 1);
+    }, 300);
+    addScore(vol1);
+}
+
+let totalHarmony = 0;
+const scoreEl = document.getElementById("score");
+function addScore(points) {
+    totalHarmony += Math.round(points * 2000);
+    scoreEl.innerText = totalHarmony;
+}
+function clearScore() {
+    totalHarmony = 0;
+    scoreEl.innerText = "0";
+}
+
+let currentChoice = "bass";
+let currentMode = "spawn";
+let linkStartBody = null;
+let linkStartPoint = null;
+let isPaused = false;
+let ropeIdCounter = 0;
+let editingWallBody = null; // muro attualmente in fase di ridimensionamento (maniglie visibili)
+let resizingWallHandle = null; // { side: 'left'|'right'|'top'|'bottom' } mentre si trascina una maniglia
+
+function toggleToolbox(event) {
+    if (event) event.stopPropagation();
+    document.getElementById("toolbox").classList.toggle("collapsed");
+}
+
+function updateRopeProps() {
+    const segVal = document.getElementById("slider-rope-seg").value;
+    document.getElementById("val-rope-seg").innerText = segVal;
+
+    for (let j = world.getJointList(); j; j = j.getNext()) {
+        if (j.isRopeDistanceJoint && typeof j.setFrequency === "function") {
+            j.setFrequency(18.0);
+        }
+    }
+}
+
+function toggleTheme() {
+    document.body.classList.toggle("light-theme");
+}
+
+function togglePause() {
+    isPaused = !isPaused;
+    const btn = document.getElementById("btn-pause-play");
+    if (isPaused) {
+        btn.innerText = "▶️ Play";
+        document.getElementById("instruction-mode").innerText = "Simulazione in PAUSA.";
+    } else {
+        btn.innerText = "⏸️ Pausa";
+        document.getElementById("instruction-mode").innerText = "Simulazione attiva.";
+    }
+}
+
+function selectBlock(type) {
+    editingWallBody = null;
+    resizingWallHandle = null;
+    if (currentMode === "spawn" && currentChoice === type) {
+        currentMode = "none";
+        document.querySelectorAll(".block-btn").forEach((btn) => btn.classList.remove("active"));
+        document.getElementById("instruction-mode").innerText =
+            "Modalità Libera: Trascina solo per muovere gli oggetti.";
+    } else {
+        currentMode = "spawn";
+        currentChoice = type;
+        linkStartBody = null;
+        linkStartPoint = null;
+        document.querySelectorAll(".block-btn").forEach((btn) => btn.classList.remove("active"));
+        document.querySelectorAll(".special-btn").forEach((btn) => btn.classList.remove("active"));
+        document.getElementById("btn-" + type).classList.add("active");
+        document.getElementById("instruction-mode").innerText = "Trascina per muovere. Clicca a vuoto per spawnare.";
+    }
+}
+
+function setMode(mode) {
+    editingWallBody = null;
+    resizingWallHandle = null;
+    if (currentMode === mode) {
+        currentMode = "none";
+        linkStartBody = null;
+        linkStartPoint = null;
+        document.querySelectorAll(".special-btn").forEach((btn) => btn.classList.remove("active"));
+        document.getElementById("instruction-mode").innerText =
+            "Modalità Libera: Trascina solo per muovere gli oggetti.";
+    } else {
+        currentMode = mode;
+        linkStartBody = null;
+        linkStartPoint = null;
+        document.querySelectorAll(".block-btn").forEach((btn) => btn.classList.remove("active"));
+        document.querySelectorAll(".special-btn").forEach((btn) => btn.classList.remove("active"));
+        document.getElementById("btn-" + mode).classList.add("active");
+
+        if (mode === "bar") {
+            document.getElementById("instruction-mode").innerText =
+                "Modo Barra Rigida: Clicca sul primo punto e poi sul secondo.";
+        } else if (mode === "rope") {
+            document.getElementById("instruction-mode").innerText =
+                "Modo Corda: Clicca sul primo punto e poi sul secondo.";
+        } else if (mode === "chain") {
+            document.getElementById("instruction-mode").innerText =
+                "Modo Catena Rigida: Clicca sul primo punto e poi sul secondo.";
+        } else if (mode === "eraser") {
+            document.getElementById("instruction-mode").innerText =
+                "Modo Gomma: Clicca un oggetto, una barra o una corda per cancellarla.";
+        }
+    }
+}
+
+const world = planck.World({ gravity: planck.Vec2(0, 9.8) });
+const canvas = document.getElementById("game-canvas");
+const ctx = canvas.getContext("2d");
+const bgCanvas = document.getElementById("bg-canvas");
+const bgCtx = bgCanvas.getContext("2d");
+
+const wallThickness = 40 / SCALE;
+const ground = world.createBody({
+    type: "static",
+    position: planck.Vec2(window.innerWidth / 2 / SCALE, (window.innerHeight - 20) / SCALE)
+});
+let groundFixture = ground.createFixture(planck.Box(window.innerWidth / 2 / SCALE, wallThickness / 2), {
+    friction: 0.3
+});
+ground.isWall = true;
+
+const wallLeft = world.createBody({
+    type: "static",
+    position: planck.Vec2(wallThickness / 2, window.innerHeight / 2 / SCALE)
+});
+let wallLeftFixture = wallLeft.createFixture(planck.Box(wallThickness / 2, window.innerHeight / 2 / SCALE), {
+    friction: 0.3
+});
+wallLeft.isWall = true;
+
+const wallRight = world.createBody({
+    type: "static",
+    position: planck.Vec2((window.innerWidth - wallThickness / 2) / SCALE, window.innerHeight / 2 / SCALE)
+});
+let wallRightFixture = wallRight.createFixture(planck.Box(wallThickness / 2, window.innerHeight / 2 / SCALE), {
+    friction: 0.3
+});
+wallRight.isWall = true;
+
+const ceiling = world.createBody({
+    type: "static",
+    position: planck.Vec2(window.innerWidth / 2 / SCALE, wallThickness / 2)
+});
+let ceilingFixture = ceiling.createFixture(planck.Box(window.innerWidth / 2 / SCALE, wallThickness / 2), {
+    friction: 0.3
+});
+ceiling.isWall = true;
+
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    bgCanvas.width = window.innerWidth;
+    bgCanvas.height = window.innerHeight;
+
+    if (ground && wallLeft && wallRight && ceiling) {
+        ground.setPosition(planck.Vec2(window.innerWidth / 2 / SCALE, (window.innerHeight - 20) / SCALE));
+        ground.destroyFixture(groundFixture);
+        groundFixture = ground.createFixture(planck.Box(window.innerWidth / 2 / SCALE, wallThickness / 2), {
+            friction: 0.3
+        });
+
+        wallRight.setPosition(
+            planck.Vec2((window.innerWidth - wallThickness / 2) / SCALE, window.innerHeight / 2 / SCALE)
+        );
+        wallRight.destroyFixture(wallRightFixture);
+        wallRightFixture = wallRight.createFixture(planck.Box(wallThickness / 2, window.innerHeight / 2 / SCALE), {
+            friction: 0.3
+        });
+
+        ceiling.setPosition(planck.Vec2(window.innerWidth / 2 / SCALE, wallThickness / 2));
+        ceiling.destroyFixture(ceilingFixture);
+        ceilingFixture = ceiling.createFixture(planck.Box(window.innerWidth / 2 / SCALE, wallThickness / 2), {
+            friction: 0.3
+        });
+
+        wallLeft.setPosition(planck.Vec2(wallThickness / 2, window.innerHeight / 2 / SCALE));
+        wallLeft.destroyFixture(wallLeftFixture);
+        wallLeftFixture = wallLeft.createFixture(planck.Box(wallThickness / 2, window.innerHeight / 2 / SCALE), {
+            friction: 0.3
+        });
+    }
+    initBackgroundTrees();
+}
+window.addEventListener("resize", resizeCanvas);
+
+let windSpeed = 0.0;
+let windTurbulence = 0.0;
+
+// Generatore di raffiche naturali: invece di un'onda sinusoidale perfetta e
+// ripetitiva, sceglie un nuovo "obiettivo" casuale a intervalli irregolari e
+// vi si avvicina gradualmente (random walk smussato). Il risultato non si
+// ripete mai in modo prevedibile, come il vento vero.
+let windGustValue = 0; // valore corrente della raffica, smussato, range ~[-1,1]
+let windGustTarget = 0; // prossimo obiettivo casuale verso cui interpolare
+let windGustChangeAt = 0; // timestamp (ms) del prossimo cambio di obiettivo
+let lastWindUpdateMs = null;
+
+function updateWindGust(nowMs) {
+    if (lastWindUpdateMs === null) lastWindUpdateMs = nowMs;
+    const dt = Math.min((nowMs - lastWindUpdateMs) / 1000, 0.1); // clamp: evita salti se il tab era in background
+    lastWindUpdateMs = nowMs;
+
+    if (nowMs >= windGustChangeAt) {
+        windGustTarget = Math.random() * 2 - 1; // nuovo obiettivo casuale tra -1 e 1
+        windGustChangeAt = nowMs + 500 + Math.random() * 2000; // prossima raffica tra 0.5s e 2.5s
+    }
+    // interpolazione morbida verso l'obiettivo: niente scatti bruschi
+    windGustValue += (windGustTarget - windGustValue) * Math.min(dt * 1.2, 1);
+}
+
+function updatePhysics() {
+    const gravVal = parseFloat(document.getElementById("slider-gravity").value);
+    const dragVal = parseFloat(document.getElementById("slider-drag").value);
+    windSpeed = parseFloat(document.getElementById("slider-wind").value);
+    windTurbulence = parseFloat(document.getElementById("slider-turbulence").value);
+
+    document.getElementById("val-gravity").innerText = gravVal;
+    document.getElementById("val-drag").innerText = dragVal;
+    document.getElementById("val-wind").innerText = windSpeed;
+    document.getElementById("val-turbulence").innerText = windTurbulence;
+
+    world.setGravity(planck.Vec2(0, gravVal));
+
+    for (let b = world.getBodyList(); b; b = b.getNext()) {
+        if (!b.isStatic() && !b.isWall) b.setLinearDamping(dragVal);
+    }
+}
+
+function resetPhysics() {
+    document.getElementById("slider-gravity").value = 9.8;
+    document.getElementById("slider-drag").value = 0.02;
+    document.getElementById("slider-wind").value = 0.0;
+    document.getElementById("slider-turbulence").value = 0.0;
+    updatePhysics();
+}
+
+let mouseJoint = null;
+let mouseBody = world.createBody();
+
+canvas.addEventListener("pointerdown", (event) => {
+    const clientX = event.clientX;
+    const clientY = event.clientY;
+
+    if (clientX < 280 && clientY < 200) return;
+    if (clientX > window.innerWidth - 300 && clientY < 60) return;
+
+    const toolbox = document.getElementById("toolbox");
+    if (!toolbox.classList.contains("collapsed") && clientX > window.innerWidth - 320 && clientY < window.innerHeight)
+        return;
+
+    const mousePos = planck.Vec2(clientX / SCALE, clientY / SCALE);
+    let clickedBody = null;
+    for (let b = world.getBodyList(); b; b = b.getNext()) {
+        if (b.isWall) continue;
+        for (let f = b.getFixtureList(); f; f = f.getNext()) {
+            if (f.testPoint(mousePos)) {
+                clickedBody = b;
+                break;
+            }
+        }
+        if (clickedBody) break;
+    }
+
+    // Maniglie di resize del muro in editing: hanno priorità su tutto il resto.
+    if (editingWallBody) {
+        const wallPos = editingWallBody.getPosition();
+        const cx = wallPos.x * SCALE;
+        const cy = wallPos.y * SCALE;
+        const halfWpx = editingWallBody.wallHalfW * SCALE;
+        const halfHpx = editingWallBody.wallHalfH * SCALE;
+        const handleOffset = 18;
+        const handles = {
+            right: { x: cx + halfWpx + handleOffset, y: cy },
+            left: { x: cx - halfWpx - handleOffset, y: cy },
+            top: { x: cx, y: cy - halfHpx - handleOffset },
+            bottom: { x: cx, y: cy + halfHpx + handleOffset }
+        };
+        let hitSide = null;
+        for (const side in handles) {
+            const h = handles[side];
+            if (Math.hypot(clientX - h.x, clientY - h.y) < 14) {
+                hitSide = side;
+                break;
+            }
+        }
+        if (hitSide) {
+            resizingWallHandle = { side: hitSide };
+            return;
+        }
+        // Click su qualsiasi altra cosa: il muro corrente viene definito.
+        editingWallBody = null;
+    }
+
+    if (currentMode === "none") {
+        if (clickedBody && !clickedBody.isWall) {
+            mouseJoint = world.createJoint(
+                planck.MouseJoint({
+                    bodyA: mouseBody,
+                    bodyB: clickedBody,
+                    target: mousePos,
+                    maxForce: 3000 * SCALE * clickedBody.getMass(),
+                    frequencyHz: 30.0,
+                    dampingRatio: 1.0
+                })
+            );
+        }
+        return;
+    }
+
+    if (currentMode === "spawn") {
+        if (clickedBody) {
+            if (!clickedBody.isWall) {
+                mouseJoint = world.createJoint(
+                    planck.MouseJoint({
+                        bodyA: mouseBody,
+                        bodyB: clickedBody,
+                        target: mousePos,
+                        maxForce: 3000 * SCALE * clickedBody.getMass(),
+                        frequencyHz: 30.0,
+                        dampingRatio: 1.0
+                    })
+                );
+            }
+            return;
+        }
+        const newBody = spawnElement(mousePos.x, mousePos.y, currentChoice);
+        if (currentChoice === "wall") {
+            editingWallBody = newBody;
+        }
+        return;
+    }
+
+    if (currentMode === "eraser") {
+        let clickedJoint = null;
+        for (let j = world.getJointList(); j; j = j.getNext()) {
+            if (typeof j.getAnchorA === "function" && typeof j.getAnchorB === "function") {
+                const aA = j.getAnchorA();
+                const aB = j.getAnchorB();
+                const pA = planck.Vec2(aA.x * SCALE, aA.y * SCALE);
+                const pB = planck.Vec2(aB.x * SCALE, aB.y * SCALE);
+                const screenMouse = planck.Vec2(clientX, clientY);
+                if (aA && aB && distToSegment(screenMouse, pA, pB) < 15) {
+                    clickedJoint = j;
+                    break;
+                }
+            }
+        }
+        if (clickedJoint) {
+            if (clickedJoint.ropeId !== undefined) {
+                const rId = clickedJoint.ropeId;
+                let b = world.getBodyList();
+                while (b) {
+                    let nextB = b.getNext();
+                    if (b.ropeId === rId) world.destroyBody(b);
+                    b = nextB;
+                }
+                let j = world.getJointList();
+                while (j) {
+                    let nextJ = j.getNext();
+                    if (j.ropeId === rId) world.destroyJoint(j);
+                    j = nextJ;
+                }
+            } else {
+                world.destroyJoint(clickedJoint);
+            }
+        } else if (clickedBody) {
+            if (clickedBody.ropeId !== undefined) {
+                const rId = clickedBody.ropeId;
+                let b = world.getBodyList();
+                while (b) {
+                    let nextB = b.getNext();
+                    if (b.ropeId === rId) world.destroyBody(b);
+                    b = nextB;
+                }
+                let j = world.getJointList();
+                while (j) {
+                    let nextJ = j.getNext();
+                    if (j.ropeId === rId) world.destroyJoint(j);
+                    j = nextJ;
+                }
+            } else {
+                let j = world.getJointList();
+                while (j) {
+                    let nextJ = j.getNext();
+                    if (j.getBodyA() === clickedBody || j.getBodyB() === clickedBody) world.destroyJoint(j);
+                    j = nextJ;
+                }
+                if (clickedBody === editingWallBody) {
+                    editingWallBody = null;
+                    resizingWallHandle = null;
+                }
+                world.destroyBody(clickedBody);
+            }
+        }
+    } else if (currentMode === "bar" || currentMode === "rope" || currentMode === "chain") {
+        if (clickedBody) {
+            const localPoint = clickedBody.getLocalPoint(mousePos);
+            if (!linkStartBody) {
+                linkStartBody = clickedBody;
+                linkStartPoint = localPoint;
+            } else {
+                if (
+                    linkStartBody === clickedBody &&
+                    planck.Vec2.distance(
+                        linkStartBody.getWorldPoint(linkStartPoint),
+                        clickedBody.getWorldPoint(localPoint)
+                    ) <
+                        10 / SCALE
+                ) {
+                    linkStartBody = null;
+                    linkStartPoint = null;
+                    return;
+                }
+
+                const posA = linkStartBody.getWorldPoint(linkStartPoint);
+                const posB = clickedBody.getWorldPoint(localPoint);
+
+                if (currentMode === "bar") {
+                    const joint = world.createJoint(
+                        planck.DistanceJoint({
+                            bodyA: linkStartBody,
+                            bodyB: clickedBody,
+                            localAnchorA: linkStartPoint,
+                            localAnchorB: localPoint,
+                            length: planck.Vec2.distance(posA, posB),
+                            frequencyHz: 0,
+                            dampingRatio: 0.1
+                        })
+                    );
+                    joint.isCustomRender = true;
+                    joint.renderColor = "#ffa502";
+                    joint.renderWidth = 4;
+                } else if (currentMode === "chain") {
+                    // NB: qui i "segmenti" sono corpi rigidi veri (piccole barre), uniti da
+                    // RevoluteJoint (perno). Un corpo rigido non può allungarsi per
+                    // definizione: a differenza del DistanceJoint, il RevoluteJoint non ha
+                    // una "lunghezza" da preservare, quindi la catena non può stirarsi anche
+                    // con molti segmenti e un carico pesante in fondo.
+                    ropeIdCounter++;
+                    const currentRopeId = ropeIdCounter;
+                    const numSegments = parseInt(document.getElementById("slider-rope-seg").value);
+                    const totalDist = planck.Vec2.distance(posA, posB);
+                    const segmentLength = totalDist / numSegments;
+                    const dirX = (posB.x - posA.x) / totalDist;
+                    const dirY = (posB.y - posA.y) / totalDist;
+                    const chainAngle = Math.atan2(dirY, dirX);
+                    const linkHalfHeight = 2.5 / SCALE;
+
+                    let prevBody = linkStartBody;
+
+                    for (let i = 0; i < numSegments; i++) {
+                        const startX = posA.x + dirX * segmentLength * i;
+                        const startY = posA.y + dirY * segmentLength * i;
+                        const endX = posA.x + dirX * segmentLength * (i + 1);
+                        const endY = posA.y + dirY * segmentLength * (i + 1);
+                        const cx = (startX + endX) / 2;
+                        const cy = (startY + endY) / 2;
+
+                        const segBody = world.createDynamicBody({
+                            position: planck.Vec2(cx, cy),
+                            angle: chainAngle
+                        });
+                        segBody.createFixture(planck.Box(segmentLength / 2, linkHalfHeight), {
+                            density: 0.5,
+                            friction: 0.2,
+                            filterCategoryBits: 0x0002,
+                            filterMaskBits: 0xffff & ~0x0002
+                        });
+                        segBody.setLinearDamping(0.1);
+                        segBody.setAngularDamping(0.3);
+                        segBody.ropeId = currentRopeId;
+                        segBody.renderColor = "#ffa502";
+
+                        const pivot = planck.Vec2(startX, startY);
+                        const joint = world.createJoint(planck.RevoluteJoint({}, prevBody, segBody, pivot));
+                        joint.ropeId = currentRopeId;
+                        joint.isCustomRender = true;
+                        joint.renderColor = "#c47a00";
+                        joint.renderWidth = 2;
+
+                        prevBody = segBody;
+                    }
+
+                    const finalJoint = world.createJoint(planck.RevoluteJoint({}, prevBody, clickedBody, posB));
+                    finalJoint.ropeId = currentRopeId;
+                    finalJoint.isCustomRender = true;
+                    finalJoint.renderColor = "#c47a00";
+                    finalJoint.renderWidth = 2;
+                } else {
+                    ropeIdCounter++;
+                    const currentRopeId = ropeIdCounter;
+                    const numSegments = parseInt(document.getElementById("slider-rope-seg").value);
+                    const totalDist = planck.Vec2.distance(posA, posB);
+                    const segmentLength = totalDist / numSegments;
+                    let prevBody = linkStartBody;
+                    let prevAnchor = linkStartPoint;
+
+                    for (let i = 1; i < numSegments; i++) {
+                        const percent = i / numSegments;
+                        const x = posA.x + (posB.x - posA.x) * percent;
+                        const y = posA.y + (posB.y - posA.y) * percent;
+                        const segBody = world.createDynamicBody({ position: planck.Vec2(x, y) });
+                        segBody.createFixture(planck.Circle(2.5 / SCALE), {
+                            density: 0.2,
+                            friction: 0.2,
+                            filterCategoryBits: 0x0002,
+                            filterMaskBits: 0xffff & ~0x0002
+                        });
+                        segBody.setLinearDamping(0.25);
+                        segBody.ropeId = currentRopeId;
+
+                        const joint = world.createJoint(
+                            planck.DistanceJoint({
+                                bodyA: prevBody,
+                                bodyB: segBody,
+                                localAnchorA: prevAnchor,
+                                length: segmentLength,
+                                frequencyHz: 18.0,
+                                dampingRatio: 0.9
+                            })
+                        );
+                        joint.ropeId = currentRopeId;
+                        joint.isRopeDistanceJoint = true;
+                        joint.isCustomRender = true;
+                        joint.renderColor = "#ff4757";
+                        joint.renderWidth = 2;
+
+                        prevBody = segBody;
+                        prevAnchor = planck.Vec2(0, 0);
+                    }
+                    const finalJoint = world.createJoint(
+                        planck.DistanceJoint({
+                            bodyA: prevBody,
+                            bodyB: clickedBody,
+                            localAnchorA: prevAnchor,
+                            localAnchorB: localPoint,
+                            length: segmentLength,
+                            frequencyHz: 18.0,
+                            dampingRatio: 0.9
+                        })
+                    );
+                    finalJoint.ropeId = currentRopeId;
+                    finalJoint.isRopeDistanceJoint = true;
+                    finalJoint.isCustomRender = true;
+                    finalJoint.renderColor = "#ff4757";
+                    finalJoint.renderWidth = 2;
+                }
+                linkStartBody = null;
+                linkStartPoint = null;
+            }
+        }
+    }
+});
+
+function distToSegment(p, p1, p2) {
+    const l2 = (p2.x - p1.x) * (p2.x - p1.x) + (p2.y - p1.y) * (p2.y - p1.y);
+    if (l2 === 0) return Math.hypot(p.x - p1.x, p.y - p1.y);
+    let t = ((p.x - p1.x) * (p2.x - p1.x) + (p.y - p1.y) * (p2.y - p1.y)) / l2;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(p.x - (p1.x + t * (p2.x - p1.x)), p.y - (p1.y + t * (p2.y - p1.y)));
+}
+
+const MIN_WALL_HALF = 10 / SCALE; // dimensione minima per lato del muro
+
+function resizeWall(body, side, mouseWorldPos) {
+    const pos = body.getPosition();
+    let halfW = body.wallHalfW;
+    let halfH = body.wallHalfH;
+
+    if (side === "right") {
+        const leftEdge = pos.x - halfW; // lato opposto: resta fisso
+        halfW = Math.max(MIN_WALL_HALF, (mouseWorldPos.x - leftEdge) / 2);
+        body.setPosition(planck.Vec2(leftEdge + halfW, pos.y));
+    } else if (side === "left") {
+        const rightEdge = pos.x + halfW; // lato opposto: resta fisso
+        halfW = Math.max(MIN_WALL_HALF, (rightEdge - mouseWorldPos.x) / 2);
+        body.setPosition(planck.Vec2(rightEdge - halfW, pos.y));
+    } else if (side === "bottom") {
+        const topEdge = pos.y - halfH; // lato opposto: resta fisso
+        halfH = Math.max(MIN_WALL_HALF, (mouseWorldPos.y - topEdge) / 2);
+        body.setPosition(planck.Vec2(pos.x, topEdge + halfH));
+    } else if (side === "top") {
+        const bottomEdge = pos.y + halfH; // lato opposto: resta fisso
+        halfH = Math.max(MIN_WALL_HALF, (bottomEdge - mouseWorldPos.y) / 2);
+        body.setPosition(planck.Vec2(pos.x, bottomEdge - halfH));
+    }
+
+    // planck.js non permette di ridimensionare una fixture esistente:
+    // va distrutta e ricreata con le nuove dimensioni.
+    let f = body.getFixtureList();
+    while (f) {
+        const nextF = f.getNext();
+        body.destroyFixture(f);
+        f = nextF;
+    }
+    body.createFixture(planck.Box(halfW, halfH), {
+        density: blockConfigs.wall.density,
+        restitution: blockConfigs.wall.restitution,
+        friction: 0.2
+    });
+    body.wallHalfW = halfW;
+    body.wallHalfH = halfH;
+}
+
+canvas.addEventListener("pointermove", (event) => {
+    const mousePos = planck.Vec2(event.clientX / SCALE, event.clientY / SCALE);
+    if (mouseJoint) mouseJoint.setTarget(mousePos);
+
+    if (resizingWallHandle && editingWallBody) {
+        resizeWall(editingWallBody, resizingWallHandle.side, mousePos);
+    }
+});
+
+window.addEventListener("pointerup", () => {
+    if (mouseJoint) {
+        world.destroyJoint(mouseJoint);
+        mouseJoint = null;
+    }
+    resizingWallHandle = null;
+});
+
+function getPolygonVertices(radius, sides) {
+    let vertices = [];
+    for (let i = 0; i < sides; i++) {
+        let angle = (i * 2 * Math.PI) / sides - Math.PI / 2;
+        vertices.push(planck.Vec2((radius * Math.cos(angle)) / SCALE, (radius * Math.sin(angle)) / SCALE));
+    }
+    return vertices;
+}
+
+const blockConfigs = {
+    bass: { name: "bass", sides: 4, size: 45, color: "#ff6b81", density: 0.8, restitution: 0.15 },
+    wood: { name: "wood", sides: 5, size: 36, color: "#e67e22", density: 0.6, restitution: 0.35 },
+    mid: { name: "mid", sides: 6, size: 32, color: "#70a1ff", density: 0.45, restitution: 0.5 },
+    rubber: { name: "rubber", sides: 7, size: 28, color: "#ffa502", density: 0.35, restitution: 0.75 },
+    high: { name: "high", sides: 8, size: 26, color: "#2ed573", density: 0.25, restitution: 0.85 },
+    neon: { name: "neon", isCircle: true, radius: 24, color: "#ff00ff", density: 0.15, restitution: 0.95 },
+    wall: {
+        name: "wall",
+        isRect: true,
+        w: 90,
+        h: 90,
+        color: "#a4b0be",
+        density: 0.8,
+        restitution: 0.2,
+        isStatic: true
+    }
+};
+
+function spawnElement(x, y, typeKey) {
+    const cfg = blockConfigs[typeKey];
+    const currentDrag = parseFloat(document.getElementById("slider-drag").value);
+    let body = cfg.isStatic
+        ? world.createBody({ type: "static", position: planck.Vec2(x, y) })
+        : world.createDynamicBody({ position: planck.Vec2(x, y) });
+
+    if (cfg.isCircle) {
+        body.createFixture(planck.Circle(cfg.radius / SCALE), {
+            density: cfg.density,
+            restitution: cfg.restitution,
+            friction: 0.2
+        });
+    } else if (cfg.isRect) {
+        body.createFixture(planck.Box(cfg.w / 2 / SCALE, cfg.h / 2 / SCALE), {
+            density: cfg.density,
+            restitution: cfg.restitution,
+            friction: 0.2
+        });
+        if (typeKey === "wall") {
+            body.wallHalfW = cfg.w / 2 / SCALE;
+            body.wallHalfH = cfg.h / 2 / SCALE;
+        }
+    } else if (cfg.sides === 4) {
+        body.createFixture(planck.Box(cfg.size / SCALE, cfg.size / SCALE), {
+            density: cfg.density,
+            restitution: cfg.restitution,
+            friction: 0.2
+        });
+    } else {
+        const verts = getPolygonVertices(cfg.size, cfg.sides);
+        body.createFixture(planck.Polygon(verts), {
+            density: cfg.density,
+            restitution: cfg.restitution,
+            friction: 0.2
+        });
+    }
+
+    body.setLinearDamping(currentDrag);
+    body.soundType = cfg.name;
+    body.renderColor = cfg.color;
+    return body;
+}
+
+world.on("begin-contact", (contact) => {
+    const bodyA = contact.getFixtureA().getBody();
+    const bodyB = contact.getFixtureB().getBody();
+    if (bodyA.soundType && bodyB.soundType) {
+        const velA = bodyA.getLinearVelocity();
+        const velB = bodyB.getLinearVelocity();
+        const relativeVel = Math.hypot(velA.x - velB.x, velA.y - velB.y);
+        if (relativeVel > 0.8) playMixedSound(bodyA.soundType, bodyB.soundType, relativeVel);
+    }
+});
+
+function triggerDecay() {
+    for (let b = world.getBodyList(); b; b = b.getNext()) {
+        if (b.isStatic() || b.isWall) continue;
+        b.applyForceToCenter(
+            planck.Vec2(((Math.random() - 0.5) * 4000) / SCALE, (-6000 - Math.random() * 4000) / SCALE),
+            true
+        );
+        b.setAngularVelocity((Math.random() - 0.5) * 10);
+    }
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(baseRoot * PHI, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(baseRoot * PHI * 2, audioCtx.currentTime + 0.6);
+    gain.gain.setValueAtTime(0.25 * masterVolume, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 1.8);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(1.8);
+}
+
+function clearScene() {
+    let b = world.getBodyList();
+    while (b) {
+        let nextB = b.getNext();
+        if (!b.isWall) world.destroyBody(b);
+        b = nextB;
+    }
+    linkStartBody = null;
+    linkStartPoint = null;
+    editingWallBody = null;
+    resizingWallHandle = null;
+    clearScore();
+}
+
+let timeStep = 1 / 60;
+let velIterations = 20;
+let posIterations = 60;
+const PHYSICS_SUBSTEPS = 4; // più step piccoli per frame invece di uno solo grande
+
+let backgroundTrees = [];
+let maxDepth = 6;
+let baseSpread = 0.45;
+
+function seededRandom(s) {
+    let seed = s;
+    return function () {
+        seed = (seed * 16807) % 2147483647;
+        return (seed - 1) / 2147483646;
+    };
+}
+
+function createFractalTree(worldX, groundY, scale, seedVal) {
+    const trunkLen = 110 * scale;
+    const tree = {
+        worldX,
+        groundY,
+        scale,
+        trunkLen,
+        branchCount: 0,
+        bX1: null,
+        bY1: null,
+        bLength: null,
+        bAngle: null,
+        bDepthArr: null,
+        bDepthRatio: null,
+        bParent: null,
+        bRandFactor: null,
+        bThickness: null,
+        bIsTerminal: null,
+        pX1: null,
+        pY1: null,
+        pX2: null,
+        pY2: null,
+        pGrow: null,
+        pValid: null
+    };
+    let rand = seededRandom(seedVal);
+    const tmp = [];
+
+    function recurse(x, y, angle, length, depth, parentIndex) {
+        if (depth > maxDepth || length < 6 * scale) return;
+        const endX = x + Math.sin(angle) * length;
+        const endY = y - Math.cos(angle) * length;
+        const idx = tmp.length / 9;
+        const dr = depth / maxDepth;
+        const randAngle = (rand() - 0.5) * 0.3;
+        const randLen = 0.58 + rand() * 0.12;
+        const rf = rand();
+
+        tmp.push(
+            x,
+            y,
+            length,
+            angle,
+            depth,
+            dr,
+            parentIndex,
+            rf,
+            Math.max(0.5, (maxDepth - depth) * 1.1 * scale + 0.4)
+        );
+
+        const spread = baseSpread * (0.8 + rand() * 0.4);
+        const nextLen = length * randLen;
+        recurse(endX, endY, angle - spread + randAngle, nextLen, depth + 1, idx);
+        recurse(endX, endY, angle + spread + randAngle, nextLen, depth + 1, idx);
+    }
+
+    recurse(worldX, groundY, 0, trunkLen, 0, -1);
+
+    const n = tmp.length / 9;
+    tree.branchCount = n;
+    tree.bX1 = new Float64Array(n);
+    tree.bY1 = new Float64Array(n);
+    tree.bLength = new Float64Array(n);
+    tree.bAngle = new Float64Array(n);
+    tree.bDepthArr = new Uint16Array(n);
+    tree.bDepthRatio = new Float32Array(n);
+    tree.bParent = new Int32Array(n);
+    tree.bRandFactor = new Float32Array(n);
+    tree.bThickness = new Float32Array(n);
+    tree.bIsTerminal = new Uint8Array(n);
+    tree.pX1 = new Float64Array(n);
+    tree.pY1 = new Float64Array(n);
+    tree.pX2 = new Float64Array(n);
+    tree.pY2 = new Float64Array(n);
+    tree.pValid = new Uint8Array(n);
+
+    for (let i = 0; i < n; i++) {
+        const o = i * 9;
+        tree.bX1[i] = tmp[o];
+        tree.bY1[i] = tmp[o + 1];
+        tree.bLength[i] = tmp[o + 2];
+        tree.bAngle[i] = tmp[o + 3];
+        tree.bDepthArr[i] = tmp[o + 4];
+        tree.bDepthRatio[i] = tmp[o + 5];
+        tree.bParent[i] = tmp[o + 6];
+        tree.bRandFactor[i] = tmp[o + 7];
+        tree.bThickness[i] = tmp[o + 8];
+    }
+
+    const hasChild = new Uint8Array(n);
+    for (let i = 0; i < n; i++) {
+        const pi = tree.bParent[i];
+        if (pi >= 0) hasChild[pi] = 1;
+    }
+    for (let i = 0; i < n; i++) {
+        if (!hasChild[i]) tree.bIsTerminal[i] = 1;
+    }
+    return tree;
+}
+
+function updateTreesCount() {
+    const countInput = parseInt(document.getElementById("input-trees-count").value) || 12;
+    document.getElementById("val-trees-count").innerText = countInput;
+    initCustomBackgroundTrees(countInput);
+}
+
+function initCustomBackgroundTrees(count) {
+    backgroundTrees = [];
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    for (let i = 0; i < count; i++) {
+        const posX = w * ((i + 0.5) / count) + (Math.random() - 0.5) * 40;
+        const scaleVal = 0.5 + Math.random() * 0.7;
+        const seedVal = 100 + i * 37;
+        const groundY = h * (0.68 + Math.random() * 0.08);
+        backgroundTrees.push(createFractalTree(posX, groundY, scaleVal, seedVal));
+    }
+}
+
+function initBackgroundTrees() {
+    const countInput = parseInt(document.getElementById("input-trees-count")?.value) || 12;
+    initCustomBackgroundTrees(countInput);
+}
+initBackgroundTrees();
+
+let fallingLeaves = [];
+for (let i = 0; i < 90; i++) {
+    fallingLeaves.push({
+        x: Math.random() * window.innerWidth,
+        y: Math.random() * window.innerHeight,
+        size: Math.random() * 7 + 3,
+        speedY: Math.random() * 0.9 + 0.4,
+        angle: Math.random() * Math.PI * 2,
+        spin: (Math.random() - 0.5) * 0.03
+    });
+}
+
+function drawJapaneseBackground() {
+    const isLight = document.body.classList.contains("light-theme");
+    bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+
+    const w = bgCanvas.width;
+    const h = bgCanvas.height;
+
+    let skyGrad = bgCtx.createLinearGradient(0, 0, 0, h);
+    if (isLight) {
+        skyGrad.addColorStop(0, "#ffd1dc");
+        skyGrad.addColorStop(0.5, "#e0f2fe");
+        skyGrad.addColorStop(1, "#f1f5f9");
+    } else {
+        skyGrad.addColorStop(0, "#1e1b4b");
+        skyGrad.addColorStop(0.5, "#311030");
+        skyGrad.addColorStop(1, "#0f172a");
+    }
+    bgCtx.fillStyle = skyGrad;
+    bgCtx.fillRect(0, 0, w, h);
+
+    bgCtx.fillStyle = isLight ? "rgba(251, 191, 36, 0.3)" : "rgba(244, 114, 182, 0.15)";
+    bgCtx.beginPath();
+    bgCtx.arc(w * 0.8, h * 0.25, 70, 0, Math.PI * 2);
+    bgCtx.fill();
+
+    bgCtx.fillStyle = isLight ? "rgba(148, 163, 184, 0.4)" : "rgba(30, 41, 59, 0.6)";
+    bgCtx.beginPath();
+    bgCtx.moveTo(0, h * 0.65);
+    bgCtx.lineTo(w * 0.2, h * 0.45);
+    bgCtx.lineTo(w * 0.5, h * 0.6);
+    bgCtx.lineTo(w * 0.75, h * 0.4);
+    bgCtx.lineTo(w, h * 0.55);
+    bgCtx.lineTo(w, h);
+    bgCtx.lineTo(0, h);
+    bgCtx.closePath();
+    bgCtx.fill();
+
+    bgCtx.fillStyle = isLight ? "rgba(100, 116, 139, 0.6)" : "rgba(15, 23, 42, 0.85)";
+    bgCtx.beginPath();
+    bgCtx.moveTo(0, h * 0.75);
+    bgCtx.lineTo(w * 0.35, h * 0.55);
+    bgCtx.lineTo(w * 0.6, h * 0.68);
+    bgCtx.lineTo(w * 0.85, h * 0.52);
+    bgCtx.lineTo(w, h * 0.62);
+    bgCtx.lineTo(w, h);
+    bgCtx.lineTo(0, h);
+    bgCtx.closePath();
+    bgCtx.fill();
+
+    function drawPagoda(pX, pY) {
+        bgCtx.fillStyle = isLight ? "#475569" : "#090d16";
+        bgCtx.fillRect(pX - 16, pY - 25, 32, 25);
+        bgCtx.beginPath();
+        bgCtx.moveTo(pX - 35, pY);
+        bgCtx.lineTo(pX + 35, pY);
+        bgCtx.lineTo(pX + 25, pY - 12);
+        bgCtx.lineTo(pX - 25, pY - 12);
+        bgCtx.closePath();
+        bgCtx.fill();
+        bgCtx.fillRect(pX - 12, pY - 37, 24, 12);
+        bgCtx.beginPath();
+        bgCtx.moveTo(pX - 25, pY - 25);
+        bgCtx.lineTo(pX + 25, pY - 25);
+        bgCtx.lineTo(pX + 18, pY - 35);
+        bgCtx.lineTo(pX - 18, pY - 35);
+        bgCtx.closePath();
+        bgCtx.fill();
+        bgCtx.beginPath();
+        bgCtx.moveTo(pX - 16, pY - 45);
+        bgCtx.lineTo(pX + 16, pY - 45);
+        bgCtx.lineTo(pX + 10, pY - 52);
+        bgCtx.lineTo(pX - 10, pY - 52);
+        bgCtx.closePath();
+        bgCtx.fill();
+        bgCtx.fillRect(pX - 1.5, pY - 64, 3, 12);
+    }
+    drawPagoda(w * 0.72, h * 0.57);
+    drawPagoda(w * 0.38, h * 0.61);
+
+    const time = Date.now() * 0.003;
+    updateWindGust(Date.now());
+    const effectiveWind = windSpeed + windGustValue * windTurbulence;
+
+    backgroundTrees.forEach((t) => {
+        const n = t.branchCount;
+        const gw = effectiveWind * 0.1;
+
+        for (let i = 0; i < n; i++) {
+            const pi = t.bParent[i];
+            let x1, y1;
+            if (pi === -1) {
+                x1 = t.bX1[i];
+                y1 = t.bY1[i];
+            } else {
+                if (!t.pValid[pi]) {
+                    t.pValid[i] = 0;
+                    continue;
+                }
+                x1 = t.pX2[pi];
+                y1 = t.pY2[pi];
+            }
+
+            const dr = t.bDepthRatio ? t.bDepthRatio[i] : t.bDepthArr[i] / maxDepth;
+            const rf = t.bRandFactor[i];
+            const d = t.bDepthArr[i];
+            const wind = gw * (0.2 + dr * 0.8) + Math.sin(time + rf * 20 + d) * 0.08 * dr;
+            const a = t.bAngle[i] + wind;
+            const len = t.bLength[i];
+
+            t.pX1[i] = x1;
+            t.pY1[i] = y1;
+            t.pX2[i] = x1 + Math.sin(a) * len;
+            t.pY2[i] = y1 - Math.cos(a) * len;
+            t.pValid[i] = 1;
+        }
+
+        bgCtx.lineCap = "round";
+        let prevW = -1,
+            pathStarted = false;
+        for (let i = 0; i < n; i++) {
+            if (!t.pValid[i]) continue;
+            const wthick = (t.bThickness[i] + 0.5) | 0;
+            if (wthick !== prevW) {
+                if (pathStarted) bgCtx.stroke();
+                bgCtx.beginPath();
+                bgCtx.lineWidth = wthick;
+                bgCtx.strokeStyle = isLight
+                    ? t.scale < 0.8
+                        ? "#94a3b8"
+                        : "#334155"
+                    : t.scale < 0.8
+                      ? "#1e293b"
+                      : "#0f172a";
+                prevW = wthick;
+                pathStarted = true;
+            }
+            bgCtx.moveTo(t.pX1[i], t.pY1[i]);
+            bgCtx.lineTo(t.pX2[i], t.pY2[i]);
+        }
+        if (pathStarted) bgCtx.stroke();
+
+        bgCtx.fillStyle = isLight ? "rgba(244, 114, 182, 0.85)" : "rgba(244, 114, 182, 0.7)";
+        bgCtx.beginPath();
+        const dotR = Math.max(2.5, 5 * t.scale);
+        for (let i = 0; i < n; i++) {
+            if (!t.bIsTerminal[i] || !t.pValid[i]) continue;
+            bgCtx.moveTo(t.pX2[i] + dotR, t.pY2[i]);
+            bgCtx.arc(t.pX2[i], t.pY2[i], dotR, 0, Math.PI * 2);
+            bgCtx.moveTo(t.pX2[i] + dotR * 0.6, t.pY2[i] - dotR * 0.5);
+            bgCtx.arc(t.pX2[i] + dotR * 0.4, t.pY2[i] - dotR * 0.4, dotR * 0.7, 0, Math.PI * 2);
+        }
+        bgCtx.fill();
+    });
+
+    bgCtx.fillStyle = isLight ? "#ec4899" : "#f472b6";
+    fallingLeaves.forEach((leaf) => {
+        leaf.x += effectiveWind * 1.5 + Math.sin(leaf.angle) * 0.8;
+        leaf.y += leaf.speedY + Math.abs(effectiveWind) * 0.1;
+        leaf.angle += leaf.spin;
+
+        if (leaf.x > w + 20) leaf.x = -20;
+        if (leaf.x < -20) leaf.x = w + 20;
+        if (leaf.y > h + 20) {
+            leaf.y = -20;
+            leaf.x = Math.random() * w;
+        }
+
+        bgCtx.save();
+        bgCtx.translate(leaf.x, leaf.y);
+        bgCtx.rotate(leaf.angle);
+        bgCtx.beginPath();
+        bgCtx.ellipse(0, 0, leaf.size, leaf.size * 0.5, 0, 0, Math.PI * 2);
+        bgCtx.fill();
+        bgCtx.restore();
+    });
+}
+
+function gameLoop() {
+    if (!isPaused) {
+        if (windSpeed !== 0 || windTurbulence > 0) {
+            const time = Date.now() * 0.003;
+            for (let b = world.getBodyList(); b; b = b.getNext()) {
+                if (!b.isStatic() && !b.isWall) {
+                    const flutter = Math.sin(time + b.getPosition().x * 0.05) * 0.5 + Math.cos(time * 0.7) * 0.5;
+                    const noise = (windGustValue * 0.7 + flutter * 0.3) * windTurbulence;
+                    const totalWindForce = ((windSpeed + noise) * 12 * b.getMass()) / SCALE;
+                    b.applyForceToCenter(planck.Vec2(totalWindForce, 0), true);
+                }
+            }
+        }
+        for (let s = 0; s < PHYSICS_SUBSTEPS; s++) {
+            world.step(timeStep / PHYSICS_SUBSTEPS, velIterations, posIterations);
+        }
+    }
+
+    drawJapaneseBackground();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const isLight = document.body.classList.contains("light-theme");
+    const wallColor = isLight ? "#d1d5db" : "#1a1a2e";
+
+    for (let b = world.getBodyList(); b; b = b.getNext()) {
+        const pos = b.getPosition();
+        const angle = b.getAngle();
+
+        ctx.save();
+        ctx.translate(pos.x * SCALE, pos.y * SCALE);
+        ctx.rotate(angle);
+
+        for (let f = b.getFixtureList(); f; f = f.getNext()) {
+            const shape = f.getType();
+            ctx.fillStyle = b.isWall ? wallColor : b.renderColor || "#fff";
+            ctx.strokeStyle = "#000";
+            ctx.lineWidth = 1.5;
+
+            if (shape === "circle") {
+                const radius = f.getShape().m_radius;
+                ctx.beginPath();
+                ctx.arc(0, 0, radius * SCALE, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+            } else if (shape === "polygon") {
+                const vertices = f.getShape().m_vertices;
+                ctx.beginPath();
+                for (let i = 0; i < vertices.length; i++) {
+                    const v = vertices[i];
+                    if (i === 0) ctx.moveTo(v.x * SCALE, v.y * SCALE);
+                    else ctx.lineTo(v.x * SCALE, v.y * SCALE);
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+            }
+        }
+        ctx.restore();
+    }
+
+    for (let j = world.getJointList(); j; j = j.getNext()) {
+        if (typeof j.getAnchorA === "function" && typeof j.getAnchorB === "function") {
+            const anchorA = j.getAnchorA();
+            const anchorB = j.getAnchorB();
+            if (anchorA && anchorB) {
+                ctx.save();
+                ctx.strokeStyle = j.renderColor || (isLight ? "#6b7280" : "#a4b0be");
+                ctx.lineWidth = j.renderWidth || 2;
+                ctx.beginPath();
+                ctx.moveTo(anchorA.x * SCALE, anchorA.y * SCALE);
+                ctx.lineTo(anchorB.x * SCALE, anchorB.y * SCALE);
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+    }
+
+    if (linkStartBody && (currentMode === "rope" || currentMode === "chain" || currentMode === "bar")) {
+        const startWorldPoint = linkStartBody.getWorldPoint(linkStartPoint);
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(startWorldPoint.x * SCALE, startWorldPoint.y * SCALE, 8, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(255, 0, 85, 0.4)";
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#ff0055";
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    if (editingWallBody) {
+        const wallPos = editingWallBody.getPosition();
+        const cx = wallPos.x * SCALE;
+        const cy = wallPos.y * SCALE;
+        const halfWpx = editingWallBody.wallHalfW * SCALE;
+        const halfHpx = editingWallBody.wallHalfH * SCALE;
+        const handleOffset = 18;
+        const arrows = [
+            { x: cx + halfWpx + handleOffset, y: cy, angle: 0 }, // destra
+            { x: cx - halfWpx - handleOffset, y: cy, angle: Math.PI }, // sinistra
+            { x: cx, y: cy - halfHpx - handleOffset, angle: -Math.PI / 2 }, // sopra
+            { x: cx, y: cy + halfHpx + handleOffset, angle: Math.PI / 2 } // sotto
+        ];
+        ctx.save();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.5;
+        arrows.forEach((a) => {
+            ctx.save();
+            ctx.translate(a.x, a.y);
+            ctx.rotate(a.angle);
+            ctx.fillStyle = "#ff0055";
+            ctx.beginPath();
+            ctx.moveTo(8, 0);
+            ctx.lineTo(-6, -7);
+            ctx.lineTo(-6, 7);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+        });
+        ctx.restore();
+    }
+
+    requestAnimationFrame(gameLoop);
+}
+
+resizeCanvas();
+requestAnimationFrame(gameLoop);
