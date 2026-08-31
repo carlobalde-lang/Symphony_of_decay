@@ -17,6 +17,7 @@
             <h1>Symphony of Decay</h1>
             <p id="instruction-mode">Trascina per muovere. Clicca a vuoto per spawnare.</p>
             <div id="score-box">Armonia: <span id="score" style="color: #2ed573">0</span></div>
+            <div id="body-count-box">Oggetti: <span id="body-count">0</span> / <span id="body-count-max">150</span></div>
         </div>
 
         <div id="toolbox" class="collapsed">
@@ -40,6 +41,11 @@
                     <button class="block-btn" id="btn-neon" onclick="selectBlock('neon')">Astral</button>
                     <button class="block-btn" id="btn-wall" onclick="selectBlock('wall')">Muro</button>
                 </div>
+            </div>
+
+            <div class="tool-group">
+                <label>Scala Musicale:</label>
+                <select id="scale-select" class="scene-select" onchange="changeScale(this.value)"></select>
             </div>
 
             <div class="tool-group">
@@ -126,6 +132,18 @@
             <button class="sub-btn" onclick="resetPhysics()">↩️ Reset Fisica</button>
 
             <div class="tool-group" style="margin-top: 4px">
+                <label>Scene Salvate:</label>
+                <select id="scene-select" class="scene-select"></select>
+                <div class="menu-controls">
+                    <button class="action-btn" onclick="saveScene()">💾 Salva</button>
+                    <button class="action-btn" onclick="loadScene()">📂 Carica</button>
+                </div>
+                <button class="sub-btn" onclick="deleteScene()" style="width: 100%; margin-top: 4px">
+                    🗑️ Elimina Selezionata
+                </button>
+            </div>
+
+            <div class="tool-group" style="margin-top: 4px">
                 <label>Mixer Volumi: <button class="sub-btn" onclick="resetMixer()">Reset</button></label>
                 <div class="mixer-item" style="margin-bottom: 6px">
                     <label>Master Generale</label>
@@ -204,6 +222,17 @@
                             step="0.1"
                             value="0.8"
                             oninput="updateVolume('neon', this.value)" />
+                    </div>
+                    <div class="mixer-item">
+                        <label>Muro</label
+                        ><input
+                            type="range"
+                            id="vol-wall"
+                            min="0"
+                            max="1"
+                            step="0.1"
+                            value="0.8"
+                            oninput="updateVolume('wall', this.value)" />
                     </div>
                 </div>
             </div>

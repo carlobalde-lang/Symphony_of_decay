@@ -2,18 +2,101 @@ const SCALE = 40.0;
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 const PI = Math.PI;
 const PHI = (1 + Math.sqrt(5)) / 2;
-const baseRoot = 110.0;
-const scales = {
-    bass: [baseRoot, baseRoot * 1.5, baseRoot * 2],
-    wood: [baseRoot * 1.25, baseRoot * 1.5, baseRoot * 2],
-    mid: [baseRoot * 2, baseRoot * 2.5, baseRoot * 3, baseRoot * 4],
-    rubber: [baseRoot * 3, baseRoot * 3.75, baseRoot * 4.5],
-    high: [baseRoot * 4, baseRoot * 5, baseRoot * 6, baseRoot * 8],
-    neon: [baseRoot * 5, baseRoot * 6, baseRoot * 7.5, baseRoot * 10],
-    pole: [baseRoot * 1.5, baseRoot * 2.5]
+const baseRoot = 110.0; // A2, radice comune di tutte le scale
+
+// Pattern di intervalli (in semitoni dalla radice) delle scale musicali più
+// diffuse. Ogni nota è generata con l'accordatura equabile standard:
+// freq = radice * 2^(semitoni/12).
+const SCALE_PATTERNS = {
+    major: [0, 2, 4, 5, 7, 9, 11],
+    naturalMinor: [0, 2, 3, 5, 7, 8, 10],
+    harmonicMinor: [0, 2, 3, 5, 7, 8, 11],
+    dorian: [0, 2, 3, 5, 7, 9, 10],
+    mixolydian: [0, 2, 4, 5, 7, 9, 10],
+    pentatonicMajor: [0, 2, 4, 7, 9],
+    pentatonicMinor: [0, 3, 5, 7, 10],
+    blues: [0, 3, 5, 6, 7, 10],
+    wholeTone: [0, 2, 4, 6, 8, 10],
+    chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+};
+const SCALE_NAMES_IT = {
+    pentatonicMinor: "Pentatonica Minore",
+    pentatonicMajor: "Pentatonica Maggiore",
+    major: "Maggiore",
+    naturalMinor: "Minore Naturale",
+    harmonicMinor: "Minore Armonica",
+    dorian: "Dorica",
+    mixolydian: "Misolidia",
+    blues: "Blues",
+    wholeTone: "Toni Interi",
+    chromatic: "Cromatica"
+};
+let currentScaleMode = "pentatonicMinor"; // pochi semitoni dissonanti, suona bene quasi sempre
+
+// Registro (grado scala centrale + ampiezza di oscillazione) di ciascun
+// materiale: mantiene il carattere sonoro precedente (bass grave, neon
+// acuto, ecc.) restando però sempre dentro la scala scelta.
+const materialRegisters = {
+    bass: { centerDegree: 0, range: 3 },
+    wood: { centerDegree: 4, range: 3 },
+    mid: { centerDegree: 8, range: 4 },
+    rubber: { centerDegree: 11, range: 3 },
+    high: { centerDegree: 15, range: 4 },
+    neon: { centerDegree: 19, range: 4 },
+    wall: { centerDegree: 2, range: 2 }
 };
 
-const volumes = { bass: 0.8, wood: 0.8, mid: 0.8, rubber: 0.8, high: 0.8, neon: 0.8, pole: 0.8 };
+// Stato melodico corrente (grado scala) per ciascun materiale.
+let melodicDegree = {};
+for (const key in materialRegisters) melodicDegree[key] = materialRegisters[key].centerDegree;
+
+function degreeToFrequency(degreeIndex) {
+    const pattern = SCALE_PATTERNS[currentScaleMode];
+    const stepsPerOctave = pattern.length;
+    const octave = Math.floor(degreeIndex / stepsPerOctave);
+    const degreeInOctave = ((degreeIndex % stepsPerOctave) + stepsPerOctave) % stepsPerOctave;
+    const semitone = pattern[degreeInOctave] + octave * 12;
+    return baseRoot * Math.pow(2, semitone / 12);
+}
+
+// Genera la prossima nota per un materiale con un random walk limitato:
+// piccolo spostamento casuale di grado in grado (mai un salto arbitrario),
+// con una leggera spinta di richiamo verso il centro del registro così la
+// melodia non "scappa" mai fuori dal carattere sonoro del materiale.
+function nextNoteFrequency(type) {
+    const reg = materialRegisters[type] || materialRegisters.wall;
+    let degree = melodicDegree[type] !== undefined ? melodicDegree[type] : reg.centerDegree;
+
+    const pull = (reg.centerDegree - degree) * 0.15;
+    const step = Math.round((Math.random() - 0.5) * 4 + pull);
+    degree = Math.max(reg.centerDegree - reg.range, Math.min(reg.centerDegree + reg.range, degree + step));
+
+    melodicDegree[type] = degree;
+    return degreeToFrequency(degree);
+}
+
+function setScaleMode(mode) {
+    if (!SCALE_PATTERNS[mode]) return;
+    currentScaleMode = mode;
+    // Riallinea lo stato melodico ai centri di registro: cambiare scala a
+    // metà brano non lascia gradi "orfani" fuori pattern.
+    for (const key in materialRegisters) melodicDegree[key] = materialRegisters[key].centerDegree;
+}
+
+function populateScaleSelect() {
+    const sel = document.getElementById("scale-select");
+    if (!sel) return;
+    sel.innerHTML = "";
+    for (const key in SCALE_NAMES_IT) {
+        const opt = document.createElement("option");
+        opt.value = key;
+        opt.textContent = SCALE_NAMES_IT[key];
+        if (key === currentScaleMode) opt.selected = true;
+        sel.appendChild(opt);
+    }
+}
+
+const volumes = { bass: 0.8, wood: 0.8, mid: 0.8, rubber: 0.8, high: 0.8, neon: 0.8, wall: 0.8 };
 let masterVolume = 0.8;
 
 function updateVolume(type, val) {
@@ -44,8 +127,7 @@ function playMixedSound(typeA, typeB, velocity) {
     const primaryType = typeA;
     const secondaryType = typeB && typeB !== typeA ? typeB : null;
 
-    const scale1 = scales[primaryType] || scales.pole;
-    const freq1 = scale1[Math.floor(Math.random() * scale1.length)];
+    const freq1 = nextNoteFrequency(primaryType);
 
     const osc1 = audioCtx.createOscillator();
     const oscSub = audioCtx.createOscillator();
@@ -79,8 +161,7 @@ function playMixedSound(typeA, typeB, velocity) {
     oscSub.stop(now + 2.6);
 
     if (secondaryType) {
-        const scale2 = scales[secondaryType] || scales.pole;
-        const freq2 = scale2[Math.floor(Math.random() * scale2.length)];
+        const freq2 = nextNoteFrequency(secondaryType);
         const osc2 = audioCtx.createOscillator();
         const gain2 = audioCtx.createGain();
         const filter2 = audioCtx.createBiquadFilter();
@@ -115,11 +196,11 @@ let totalHarmony = 0;
 const scoreEl = document.getElementById("score");
 function addScore(points) {
     totalHarmony += Math.round(points * 2000);
-    scoreEl.innerText = totalHarmony;
+    if (scoreEl) scoreEl.innerText = totalHarmony;
 }
 function clearScore() {
     totalHarmony = 0;
-    scoreEl.innerText = "0";
+    if (scoreEl) scoreEl.innerText = "0";
 }
 
 let currentChoice = "bass";
@@ -128,8 +209,11 @@ let linkStartBody = null;
 let linkStartPoint = null;
 let isPaused = false;
 let ropeIdCounter = 0;
-let editingWallBody = null; // muro attualmente in fase di ridimensionamento (maniglie visibili)
-let resizingWallHandle = null; // { side: 'left'|'right'|'top'|'bottom' } mentre si trascina una maniglia
+let editingWallBody = null;
+let resizingWallHandle = null;
+let lastTapTime = 0;
+let lastTapBody = null;
+const DOUBLE_TAP_MS = 350;
 
 function toggleToolbox(event) {
     if (event) event.stopPropagation();
@@ -163,6 +247,18 @@ function togglePause() {
     }
 }
 
+function updateCursor() {
+    const cursors = {
+        none: "grab",
+        spawn: "copy",
+        bar: "crosshair",
+        rope: "crosshair",
+        chain: "crosshair",
+        eraser: "cell"
+    };
+    canvas.style.cursor = cursors[currentMode] || "default";
+}
+
 function selectBlock(type) {
     editingWallBody = null;
     resizingWallHandle = null;
@@ -179,8 +275,15 @@ function selectBlock(type) {
         document.querySelectorAll(".block-btn").forEach((btn) => btn.classList.remove("active"));
         document.querySelectorAll(".special-btn").forEach((btn) => btn.classList.remove("active"));
         document.getElementById("btn-" + type).classList.add("active");
-        document.getElementById("instruction-mode").innerText = "Trascina per muovere. Clicca a vuoto per spawnare.";
+        if (type === "wall") {
+            document.getElementById("instruction-mode").innerText =
+                "Modo Muro: Clicca a vuoto per creare un muro. Trascina le frecce per ridimensionarlo, il cerchio blu per ruotarlo. Clicca altrove per confermare. Doppio tap su un muro esistente per modificarlo di nuovo.";
+        } else {
+            document.getElementById("instruction-mode").innerText =
+                "Trascina per muovere. Clicca a vuoto per spawnare.";
+        }
     }
+    updateCursor();
 }
 
 function setMode(mode) {
@@ -215,6 +318,7 @@ function setMode(mode) {
                 "Modo Gomma: Clicca un oggetto, una barra o una corda per cancellarla.";
         }
     }
+    updateCursor();
 }
 
 const world = planck.World({ gravity: planck.Vec2(0, 9.8) });
@@ -260,11 +364,59 @@ let ceilingFixture = ceiling.createFixture(planck.Box(window.innerWidth / 2 / SC
 });
 ceiling.isWall = true;
 
+let logicalWidth = window.innerWidth;
+let logicalHeight = window.innerHeight;
+
+const MAX_BODIES = 150;
+
+function getSpawnedBodyCount() {
+    let count = 0;
+    for (let b = world.getBodyList(); b; b = b.getNext()) {
+        if (!b.isWall) count++;
+    }
+    return count;
+}
+
+function updateBodyCountDisplay() {
+    const el = document.getElementById("body-count");
+    const box = document.getElementById("body-count-box");
+    if (!el || !box) return;
+    const count = getSpawnedBodyCount();
+    el.innerText = count;
+    box.classList.toggle("limit-full", count >= MAX_BODIES);
+    box.classList.toggle("limit-near", count < MAX_BODIES && count >= MAX_BODIES * 0.85);
+}
+
+function flashLimitWarning() {
+    const el = document.getElementById("instruction-mode");
+    if (!el) return;
+    const original = el.innerText;
+    const originalColor = el.style.color;
+    el.innerText = `⚠️ Limite di ${MAX_BODIES} oggetti raggiunto: cancella qualcosa prima di continuare`;
+    el.style.color = "#ff4757";
+    clearTimeout(flashLimitWarning._t);
+    flashLimitWarning._t = setTimeout(() => {
+        el.innerText = original;
+        el.style.color = originalColor;
+    }, 2200);
+}
+
 function resizeCanvas() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    bgCanvas.width = window.innerWidth;
-    bgCanvas.height = window.innerHeight;
+    const dpr = window.devicePixelRatio || 1;
+    logicalWidth = window.innerWidth;
+    logicalHeight = window.innerHeight;
+
+    canvas.width = logicalWidth * dpr;
+    canvas.height = logicalHeight * dpr;
+    canvas.style.width = logicalWidth + "px";
+    canvas.style.height = logicalHeight + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    bgCanvas.width = logicalWidth * dpr;
+    bgCanvas.height = logicalHeight * dpr;
+    bgCanvas.style.width = logicalWidth + "px";
+    bgCanvas.style.height = logicalHeight + "px";
+    bgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     if (ground && wallLeft && wallRight && ceiling) {
         ground.setPosition(planck.Vec2(window.innerWidth / 2 / SCALE, (window.innerHeight - 20) / SCALE));
@@ -299,26 +451,20 @@ window.addEventListener("resize", resizeCanvas);
 
 let windSpeed = 0.0;
 let windTurbulence = 0.0;
-
-// Generatore di raffiche naturali: invece di un'onda sinusoidale perfetta e
-// ripetitiva, sceglie un nuovo "obiettivo" casuale a intervalli irregolari e
-// vi si avvicina gradualmente (random walk smussato). Il risultato non si
-// ripete mai in modo prevedibile, come il vento vero.
-let windGustValue = 0; // valore corrente della raffica, smussato, range ~[-1,1]
-let windGustTarget = 0; // prossimo obiettivo casuale verso cui interpolare
-let windGustChangeAt = 0; // timestamp (ms) del prossimo cambio di obiettivo
+let windGustValue = 0;
+let windGustTarget = 0;
+let windGustChangeAt = 0;
 let lastWindUpdateMs = null;
 
 function updateWindGust(nowMs) {
     if (lastWindUpdateMs === null) lastWindUpdateMs = nowMs;
-    const dt = Math.min((nowMs - lastWindUpdateMs) / 1000, 0.1); // clamp: evita salti se il tab era in background
+    const dt = Math.min((nowMs - lastWindUpdateMs) / 1000, 0.1);
     lastWindUpdateMs = nowMs;
 
     if (nowMs >= windGustChangeAt) {
-        windGustTarget = Math.random() * 2 - 1; // nuovo obiettivo casuale tra -1 e 1
-        windGustChangeAt = nowMs + 500 + Math.random() * 2000; // prossima raffica tra 0.5s e 2.5s
+        windGustTarget = Math.random() * 2 - 1;
+        windGustChangeAt = nowMs + 500 + Math.random() * 2000;
     }
-    // interpolazione morbida verso l'obiettivo: niente scatti bruschi
     windGustValue += (windGustTarget - windGustValue) * Math.min(dt * 1.2, 1);
 }
 
@@ -375,24 +521,29 @@ canvas.addEventListener("pointerdown", (event) => {
         if (clickedBody) break;
     }
 
-    // Maniglie di resize del muro in editing: hanno priorità su tutto il resto.
+    const now = Date.now();
+    const isDoubleTapOnWall =
+        clickedBody &&
+        clickedBody.wallHalfW !== undefined &&
+        lastTapBody === clickedBody &&
+        now - lastTapTime < DOUBLE_TAP_MS;
+    lastTapTime = now;
+    lastTapBody = clickedBody || null;
+
+    if (isDoubleTapOnWall) {
+        editingWallBody = clickedBody;
+        resizingWallHandle = null;
+        document.getElementById("instruction-mode").innerText =
+            "Trascina le frecce per ridimensionare, il cerchio blu per ruotare. Clicca altrove per confermare.";
+        return;
+    }
+
     if (editingWallBody) {
-        const wallPos = editingWallBody.getPosition();
-        const cx = wallPos.x * SCALE;
-        const cy = wallPos.y * SCALE;
-        const halfWpx = editingWallBody.wallHalfW * SCALE;
-        const halfHpx = editingWallBody.wallHalfH * SCALE;
-        const handleOffset = 18;
-        const handles = {
-            right: { x: cx + halfWpx + handleOffset, y: cy },
-            left: { x: cx - halfWpx - handleOffset, y: cy },
-            top: { x: cx, y: cy - halfHpx - handleOffset },
-            bottom: { x: cx, y: cy + halfHpx + handleOffset }
-        };
+        const handles = getWallHandles(editingWallBody);
         let hitSide = null;
         for (const side in handles) {
             const h = handles[side];
-            if (Math.hypot(clientX - h.x, clientY - h.y) < 14) {
+            if (Math.hypot(clientX - h.x, clientY - h.y) < 20) {
                 hitSide = side;
                 break;
             }
@@ -401,8 +552,13 @@ canvas.addEventListener("pointerdown", (event) => {
             resizingWallHandle = { side: hitSide };
             return;
         }
-        // Click su qualsiasi altra cosa: il muro corrente viene definito.
         editingWallBody = null;
+        if (currentMode === "spawn" && currentChoice === "wall") {
+            document.getElementById("instruction-mode").innerText =
+                "Modo Muro: Clicca a vuoto per creare un muro. Trascina le frecce per ridimensionarlo, il cerchio blu per ruotarlo. Clicca altrove per confermare. Doppio tap su un muro esistente per modificarlo di nuovo.";
+        } else {
+            document.getElementById("instruction-mode").innerText = "Trascina per muovere. Clicca a vuoto per spawnare.";
+        }
     }
 
     if (currentMode === "none") {
@@ -437,9 +593,15 @@ canvas.addEventListener("pointerdown", (event) => {
             }
             return;
         }
+        if (getSpawnedBodyCount() >= MAX_BODIES) {
+            flashLimitWarning();
+            return;
+        }
         const newBody = spawnElement(mousePos.x, mousePos.y, currentChoice);
         if (currentChoice === "wall") {
             editingWallBody = newBody;
+            document.getElementById("instruction-mode").innerText =
+                "Trascina le frecce per ridimensionare, il cerchio blu per ruotare. Clicca altrove per confermare.";
         }
         return;
     }
@@ -545,11 +707,6 @@ canvas.addEventListener("pointerdown", (event) => {
                     joint.renderColor = "#ffa502";
                     joint.renderWidth = 4;
                 } else if (currentMode === "chain") {
-                    // NB: qui i "segmenti" sono corpi rigidi veri (piccole barre), uniti da
-                    // RevoluteJoint (perno). Un corpo rigido non può allungarsi per
-                    // definizione: a differenza del DistanceJoint, il RevoluteJoint non ha
-                    // una "lunghezza" da preservare, quindi la catena non può stirarsi anche
-                    // con molti segmenti e un carico pesante in fondo.
                     ropeIdCounter++;
                     const currentRopeId = ropeIdCounter;
                     const numSegments = parseInt(document.getElementById("slider-rope-seg").value);
@@ -674,33 +831,62 @@ function distToSegment(p, p1, p2) {
     return Math.hypot(p.x - (p1.x + t * (p2.x - p1.x)), p.y - (p1.y + t * (p2.y - p1.y)));
 }
 
-const MIN_WALL_HALF = 10 / SCALE; // dimensione minima per lato del muro
+const MIN_WALL_HALF = 10 / SCALE;
+const MAX_WALL_HALF = 600 / SCALE;
+const WALL_HANDLE_OFFSET = 18 / SCALE;
+
+function getWallHandles(body) {
+    const halfW = body.wallHalfW;
+    const halfH = body.wallHalfH;
+    const local = {
+        right: planck.Vec2(halfW + WALL_HANDLE_OFFSET, 0),
+        left: planck.Vec2(-(halfW + WALL_HANDLE_OFFSET), 0),
+        top: planck.Vec2(0, -(halfH + WALL_HANDLE_OFFSET)),
+        bottom: planck.Vec2(0, halfH + WALL_HANDLE_OFFSET),
+        rotate: planck.Vec2(0, -(halfH + WALL_HANDLE_OFFSET + 24 / SCALE))
+    };
+    const handles = {};
+    for (const side in local) {
+        const worldPt = body.getWorldPoint(local[side]);
+        handles[side] = { x: worldPt.x * SCALE, y: worldPt.y * SCALE };
+    }
+    return handles;
+}
+
+function rotateWall(body, mouseWorldPos) {
+    const center = body.getPosition();
+    const dx = mouseWorldPos.x - center.x;
+    const dy = mouseWorldPos.y - center.y;
+    body.setAngle(Math.atan2(dx, -dy));
+}
 
 function resizeWall(body, side, mouseWorldPos) {
-    const pos = body.getPosition();
+    const localMouse = body.getLocalPoint(mouseWorldPos);
     let halfW = body.wallHalfW;
     let halfH = body.wallHalfH;
+    let localCenterOffset = planck.Vec2(0, 0);
 
     if (side === "right") {
-        const leftEdge = pos.x - halfW; // lato opposto: resta fisso
-        halfW = Math.max(MIN_WALL_HALF, (mouseWorldPos.x - leftEdge) / 2);
-        body.setPosition(planck.Vec2(leftEdge + halfW, pos.y));
+        const newHalfW = Math.min(MAX_WALL_HALF, Math.max(MIN_WALL_HALF, (localMouse.x + halfW) / 2));
+        localCenterOffset = planck.Vec2(newHalfW - halfW, 0);
+        halfW = newHalfW;
     } else if (side === "left") {
-        const rightEdge = pos.x + halfW; // lato opposto: resta fisso
-        halfW = Math.max(MIN_WALL_HALF, (rightEdge - mouseWorldPos.x) / 2);
-        body.setPosition(planck.Vec2(rightEdge - halfW, pos.y));
+        const newHalfW = Math.min(MAX_WALL_HALF, Math.max(MIN_WALL_HALF, (halfW - localMouse.x) / 2));
+        localCenterOffset = planck.Vec2(halfW - newHalfW, 0);
+        halfW = newHalfW;
     } else if (side === "bottom") {
-        const topEdge = pos.y - halfH; // lato opposto: resta fisso
-        halfH = Math.max(MIN_WALL_HALF, (mouseWorldPos.y - topEdge) / 2);
-        body.setPosition(planck.Vec2(pos.x, topEdge + halfH));
+        const newHalfH = Math.min(MAX_WALL_HALF, Math.max(MIN_WALL_HALF, (localMouse.y + halfH) / 2));
+        localCenterOffset = planck.Vec2(0, newHalfH - halfH);
+        halfH = newHalfH;
     } else if (side === "top") {
-        const bottomEdge = pos.y + halfH; // lato opposto: resta fisso
-        halfH = Math.max(MIN_WALL_HALF, (bottomEdge - mouseWorldPos.y) / 2);
-        body.setPosition(planck.Vec2(pos.x, bottomEdge - halfH));
+        const newHalfH = Math.min(MAX_WALL_HALF, Math.max(MIN_WALL_HALF, (halfH - localMouse.y) / 2));
+        localCenterOffset = planck.Vec2(0, halfH - newHalfH);
+        halfH = newHalfH;
     }
 
-    // planck.js non permette di ridimensionare una fixture esistente:
-    // va distrutta e ricreata con le nuove dimensioni.
+    const newCenterWorld = body.getWorldPoint(localCenterOffset);
+    body.setPosition(newCenterWorld);
+
     let f = body.getFixtureList();
     while (f) {
         const nextF = f.getNext();
@@ -721,7 +907,11 @@ canvas.addEventListener("pointermove", (event) => {
     if (mouseJoint) mouseJoint.setTarget(mousePos);
 
     if (resizingWallHandle && editingWallBody) {
-        resizeWall(editingWallBody, resizingWallHandle.side, mousePos);
+        if (resizingWallHandle.side === "rotate") {
+            rotateWall(editingWallBody, mousePos);
+        } else {
+            resizeWall(editingWallBody, resizingWallHandle.side, mousePos);
+        }
     }
 });
 
@@ -732,6 +922,18 @@ window.addEventListener("pointerup", () => {
     }
     resizingWallHandle = null;
 });
+
+canvas.addEventListener(
+    "wheel",
+    (event) => {
+        if (!editingWallBody) return;
+        event.preventDefault();
+        const rotationStep = 0.05;
+        const delta = event.deltaY > 0 ? rotationStep : -rotationStep;
+        editingWallBody.setAngle(editingWallBody.getAngle() + delta);
+    },
+    { passive: false }
+);
 
 function getPolygonVertices(radius, sides) {
     let vertices = [];
@@ -850,13 +1052,304 @@ function clearScene() {
     linkStartPoint = null;
     editingWallBody = null;
     resizingWallHandle = null;
+    lastTapBody = null;
+    lastTapTime = 0;
     clearScore();
+}
+
+let flashMessageTimeout = null;
+
+function flashMessage(text, color) {
+    const el = document.getElementById("instruction-mode");
+    if (!el) return;
+    clearTimeout(flashMessageTimeout);
+    const original = el.dataset.baseText || el.innerText;
+    el.dataset.baseText = original;
+    el.innerText = text;
+    el.style.color = color || "#2ed573";
+    flashMessageTimeout = setTimeout(() => {
+        el.innerText = original;
+        el.style.color = "";
+    }, 2200);
+}
+
+function serializeScene() {
+    const bodyIndex = new Map();
+    const bodies = [];
+    let idx = 0;
+
+    for (let b = world.getBodyList(); b; b = b.getNext()) {
+        if (b.isWall) continue;
+        bodyIndex.set(b, idx);
+
+        const fixtures = [];
+        for (let f = b.getFixtureList(); f; f = f.getNext()) {
+            const shape = f.getShape();
+            const fdata = {
+                density: f.getDensity(),
+                friction: f.getFriction(),
+                restitution: f.getRestitution(),
+                filterCategoryBits: f.getFilterCategoryBits(),
+                filterMaskBits: f.getFilterMaskBits()
+            };
+            if (f.getType() === "circle") {
+                fdata.shapeType = "circle";
+                fdata.radius = shape.getRadius ? shape.getRadius() : shape.m_radius;
+            } else {
+                fdata.shapeType = "polygon";
+                const verts = shape.m_vertices || shape.getVertices();
+                fdata.vertices = verts.map((v) => ({ x: v.x, y: v.y }));
+            }
+            fixtures.push(fdata);
+        }
+
+        const pos = b.getPosition();
+        bodies.push({
+            isStatic: b.isStatic(),
+            x: pos.x,
+            y: pos.y,
+            angle: b.getAngle(),
+            soundType: b.soundType || null,
+            renderColor: b.renderColor || null,
+            ropeId: b.ropeId || null,
+            wallHalfW: b.wallHalfW || null,
+            wallHalfH: b.wallHalfH || null,
+            linearDamping: b.getLinearDamping(),
+            fixtures
+        });
+        idx++;
+    }
+
+    const joints = [];
+    for (let j = world.getJointList(); j; j = j.getNext()) {
+        const bA = j.getBodyA();
+        const bB = j.getBodyB();
+        if (!bodyIndex.has(bA) || !bodyIndex.has(bB)) continue;
+
+        const type = j.getType();
+        const jdata = {
+            type,
+            bodyA: bodyIndex.get(bA),
+            bodyB: bodyIndex.get(bB),
+            localAnchorA: j.getLocalAnchorA ? { x: j.getLocalAnchorA().x, y: j.getLocalAnchorA().y } : null,
+            localAnchorB: j.getLocalAnchorB ? { x: j.getLocalAnchorB().x, y: j.getLocalAnchorB().y } : null,
+            ropeId: j.ropeId || null,
+            isRopeDistanceJoint: !!j.isRopeDistanceJoint,
+            isCustomRender: !!j.isCustomRender,
+            renderColor: j.renderColor || null,
+            renderWidth: j.renderWidth || null
+        };
+        if (type === "distance-joint") {
+            jdata.length = j.getLength();
+            jdata.frequencyHz = j.getFrequency();
+            jdata.dampingRatio = j.getDampingRatio();
+        }
+        joints.push(jdata);
+    }
+
+    return {
+        version: 1,
+        ropeIdCounter,
+        physics: {
+            gravity: document.getElementById("slider-gravity").value,
+            drag: document.getElementById("slider-drag").value,
+            wind: document.getElementById("slider-wind").value,
+            turbulence: document.getElementById("slider-turbulence").value
+        },
+        bodies,
+        joints
+    };
+}
+
+function deserializeScene(data) {
+    clearScene();
+
+    const bodies = data.bodies.map((bd) => {
+        const body = bd.isStatic
+            ? world.createBody({ type: "static", position: planck.Vec2(bd.x, bd.y), angle: bd.angle })
+            : world.createDynamicBody({ position: planck.Vec2(bd.x, bd.y), angle: bd.angle });
+
+        bd.fixtures.forEach((fd) => {
+            const shape =
+                fd.shapeType === "circle"
+                    ? planck.Circle(fd.radius)
+                    : planck.Polygon(fd.vertices.map((v) => planck.Vec2(v.x, v.y)));
+            body.createFixture(shape, {
+                density: fd.density,
+                friction: fd.friction,
+                restitution: fd.restitution,
+                filterCategoryBits: fd.filterCategoryBits,
+                filterMaskBits: fd.filterMaskBits
+            });
+        });
+
+        body.setLinearDamping(bd.linearDamping);
+        if (bd.soundType) body.soundType = bd.soundType;
+        if (bd.renderColor) body.renderColor = bd.renderColor;
+        if (bd.ropeId) body.ropeId = bd.ropeId;
+        if (bd.wallHalfW) {
+            body.wallHalfW = bd.wallHalfW;
+            body.wallHalfH = bd.wallHalfH;
+        }
+        return body;
+    });
+
+    data.joints.forEach((jd) => {
+        const bodyA = bodies[jd.bodyA];
+        const bodyB = bodies[jd.bodyB];
+        if (!bodyA || !bodyB) return;
+
+        let joint = null;
+        if (jd.type === "distance-joint") {
+            joint = world.createJoint(
+                planck.DistanceJoint({
+                    bodyA,
+                    bodyB,
+                    localAnchorA: planck.Vec2(jd.localAnchorA.x, jd.localAnchorA.y),
+                    localAnchorB: planck.Vec2(jd.localAnchorB.x, jd.localAnchorB.y),
+                    length: jd.length,
+                    frequencyHz: jd.frequencyHz,
+                    dampingRatio: jd.dampingRatio
+                })
+            );
+        } else if (jd.type === "revolute-joint") {
+            const worldAnchor = bodyA.getWorldPoint(planck.Vec2(jd.localAnchorA.x, jd.localAnchorA.y));
+            joint = world.createJoint(planck.RevoluteJoint({}, bodyA, bodyB, worldAnchor));
+        }
+        if (!joint) return;
+
+        if (jd.ropeId) joint.ropeId = jd.ropeId;
+        if (jd.isRopeDistanceJoint) joint.isRopeDistanceJoint = true;
+        if (jd.isCustomRender) joint.isCustomRender = true;
+        if (jd.renderColor) joint.renderColor = jd.renderColor;
+        if (jd.renderWidth) joint.renderWidth = jd.renderWidth;
+    });
+
+    ropeIdCounter = Math.max(ropeIdCounter, data.ropeIdCounter || 0);
+
+    if (data.physics) {
+        document.getElementById("slider-gravity").value = data.physics.gravity;
+        document.getElementById("slider-drag").value = data.physics.drag;
+        document.getElementById("slider-wind").value = data.physics.wind;
+        document.getElementById("slider-turbulence").value = data.physics.turbulence;
+        updatePhysics();
+    }
+}
+
+const SAVE_KEY = "symphonyOfDecay_scenes";
+const OLD_SAVE_KEY = "symphonyOfDecay_savedScene";
+
+function getSavedScenes() {
+    try {
+        return JSON.parse(localStorage.getItem(SAVE_KEY) || "{}");
+    } catch (e) {
+        return {};
+    }
+}
+
+function migrateOldSingleSave() {
+    const old = localStorage.getItem(OLD_SAVE_KEY);
+    if (!old) return;
+    try {
+        const data = JSON.parse(old);
+        const scenes = getSavedScenes();
+        if (!scenes["Salvataggio precedente"]) {
+            scenes["Salvataggio precedente"] = data;
+            localStorage.setItem(SAVE_KEY, JSON.stringify(scenes));
+        }
+    } catch (e) {}
+    localStorage.removeItem(OLD_SAVE_KEY);
+}
+
+function refreshSceneList() {
+    const sel = document.getElementById("scene-select");
+    if (!sel) return;
+    const scenes = getSavedScenes();
+    const names = Object.keys(scenes).sort((a, b) => a.localeCompare(b));
+    const previousValue = sel.value;
+    sel.innerHTML = "";
+    if (names.length === 0) {
+        const opt = document.createElement("option");
+        opt.textContent = "(nessuna scena salvata)";
+        opt.disabled = true;
+        opt.selected = true;
+        sel.appendChild(opt);
+        return;
+    }
+    names.forEach((name) => {
+        const opt = document.createElement("option");
+        opt.value = name;
+        const count = scenes[name].bodies ? scenes[name].bodies.length : 0;
+        opt.textContent = `${name} (${count} oggetti)`;
+        sel.appendChild(opt);
+    });
+    if (names.includes(previousValue)) sel.value = previousValue;
+}
+
+function saveScene() {
+    const defaultName =
+        "Scena " + new Date().toLocaleString("it-IT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    const name = prompt("Nome della scena:", defaultName);
+    if (name === null) return;
+    const trimmed = name.trim();
+    if (!trimmed) {
+        flashMessage("Nome non valido", "#ff4757");
+        return;
+    }
+    try {
+        const scenes = getSavedScenes();
+        if (Object.prototype.hasOwnProperty.call(scenes, trimmed)) {
+            if (!confirm(`Esiste già una scena chiamata "${trimmed}". Sovrascriverla?`)) return;
+        }
+        const data = serializeScene();
+        scenes[trimmed] = data;
+        localStorage.setItem(SAVE_KEY, JSON.stringify(scenes));
+        refreshSceneList();
+        const sel = document.getElementById("scene-select");
+        if (sel) sel.value = trimmed;
+        flashMessage(`💾 "${trimmed}" salvata (${data.bodies.length} oggetti)`, "#2ed573");
+    } catch (e) {
+        flashMessage("⚠️ Salvataggio fallito", "#ff4757");
+    }
+}
+
+function loadScene() {
+    const sel = document.getElementById("scene-select");
+    const name = sel ? sel.value : null;
+    if (!name) {
+        flashMessage("Nessuna scena selezionata", "#ffa502");
+        return;
+    }
+    const scenes = getSavedScenes();
+    const data = scenes[name];
+    if (!data) {
+        flashMessage("Scena non trovata", "#ff4757");
+        return;
+    }
+    try {
+        deserializeScene(data);
+        flashMessage(`📂 "${name}" caricata (${data.bodies.length} oggetti)`, "#2ed573");
+    } catch (e) {
+        flashMessage("⚠️ Caricamento fallito: salvataggio incompatibile", "#ff4757");
+    }
+}
+
+function deleteScene() {
+    const sel = document.getElementById("scene-select");
+    const name = sel ? sel.value : null;
+    if (!name) return;
+    if (!confirm(`Eliminare la scena "${name}"?`)) return;
+    const scenes = getSavedScenes();
+    delete scenes[name];
+    localStorage.setItem(SAVE_KEY, JSON.stringify(scenes));
+    refreshSceneList();
+    flashMessage(`🗑️ "${name}" eliminata`, "#ffa502");
 }
 
 let timeStep = 1 / 60;
 let velIterations = 20;
 let posIterations = 60;
-const PHYSICS_SUBSTEPS = 4; // più step piccoli per frame invece di uno solo grande
+const PHYSICS_SUBSTEPS = 4;
 
 let backgroundTrees = [];
 let maxDepth = 6;
@@ -1009,10 +1502,10 @@ for (let i = 0; i < 90; i++) {
 
 function drawJapaneseBackground() {
     const isLight = document.body.classList.contains("light-theme");
-    bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+    bgCtx.clearRect(0, 0, logicalWidth, logicalHeight);
 
-    const w = bgCanvas.width;
-    const h = bgCanvas.height;
+    const w = logicalWidth;
+    const h = logicalHeight;
 
     let skyGrad = bgCtx.createLinearGradient(0, 0, 0, h);
     if (isLight) {
@@ -1203,7 +1696,7 @@ function gameLoop() {
     }
 
     drawJapaneseBackground();
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, logicalWidth, logicalHeight);
     const isLight = document.body.classList.contains("light-theme");
     const wallColor = isLight ? "#d1d5db" : "#1a1a2e";
 
@@ -1274,17 +1767,13 @@ function gameLoop() {
     }
 
     if (editingWallBody) {
-        const wallPos = editingWallBody.getPosition();
-        const cx = wallPos.x * SCALE;
-        const cy = wallPos.y * SCALE;
-        const halfWpx = editingWallBody.wallHalfW * SCALE;
-        const halfHpx = editingWallBody.wallHalfH * SCALE;
-        const handleOffset = 18;
+        const bodyAngle = editingWallBody.getAngle();
+        const handles = getWallHandles(editingWallBody);
         const arrows = [
-            { x: cx + halfWpx + handleOffset, y: cy, angle: 0 }, // destra
-            { x: cx - halfWpx - handleOffset, y: cy, angle: Math.PI }, // sinistra
-            { x: cx, y: cy - halfHpx - handleOffset, angle: -Math.PI / 2 }, // sopra
-            { x: cx, y: cy + halfHpx + handleOffset, angle: Math.PI / 2 } // sotto
+            { ...handles.right, angle: bodyAngle },
+            { ...handles.left, angle: bodyAngle + Math.PI },
+            { ...handles.top, angle: bodyAngle - Math.PI / 2 },
+            { ...handles.bottom, angle: bodyAngle + Math.PI / 2 }
         ];
         ctx.save();
         ctx.strokeStyle = "#ffffff";
@@ -1303,11 +1792,39 @@ function gameLoop() {
             ctx.stroke();
             ctx.restore();
         });
+
+        ctx.beginPath();
+        ctx.moveTo(handles.top.x, handles.top.y);
+        ctx.lineTo(handles.rotate.x, handles.rotate.y);
+        ctx.strokeStyle = "rgba(255,255,255,0.6)";
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(handles.rotate.x, handles.rotate.y, 8, 0, Math.PI * 2);
+        ctx.fillStyle = "#00d2ff";
+        ctx.fill();
+        ctx.strokeStyle = "#ffffff";
+        ctx.stroke();
         ctx.restore();
     }
 
+    updateBodyCountDisplay();
     requestAnimationFrame(gameLoop);
 }
 
 resizeCanvas();
+migrateOldSingleSave();
+refreshSceneList();
+populateScaleSelect();
+
+// Aggiunto listener per intercettare il cambio scala dal menu a tendina
+const scaleSelectEl = document.getElementById("scale-select");
+if (scaleSelectEl) {
+    scaleSelectEl.addEventListener("change", (e) => {
+        setScaleMode(e.target.value);
+    });
+}
+
+updateCursor();
+const maxBodyEl = document.getElementById("body-count-max");
+if (maxBodyEl) maxBodyEl.innerText = MAX_BODIES;
 requestAnimationFrame(gameLoop);
