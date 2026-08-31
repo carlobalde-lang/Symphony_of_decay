@@ -42,7 +42,7 @@ const TRANSLATIONS = {
         "inst-paused": "Simulation paused.",
         "inst-active": "Simulation active.",
         "inst-wall": "Wall Mode: Click empty space to create a wall. Drag arrows to resize, blue circle to rotate. Click elsewhere to confirm. Double tap an existing wall to edit it again.",
-        "inst-wall-edit": "Drag arrows to resize, blue circle to rotate. Click elsewhere to confirm.",
+        "inst-wall-edit": "Drag arrows to resize, blue circle to rotate, or drag the wall body to move it. Click elsewhere to confirm.",
         "inst-bar": "Rigid Bar Mode: Click first point, then second point.",
         "inst-rope": "Rope Mode: Click first point, then second point.",
         "inst-chain": "Rigid Chain Mode: Click first point, then second point.",
@@ -87,7 +87,7 @@ const TRANSLATIONS = {
         "inst-paused": "Simulazione in PAUSA.",
         "inst-active": "Simulazione attiva.",
         "inst-wall": "Modo Muro: Clicca a vuoto per creare un muro. Trascina le frecce per ridimensionarlo, il cerchio blu per ruotarlo. Clicca altrove per confermare. Doppio tap su un muro esistente per modificarlo di nuovo.",
-        "inst-wall-edit": "Trascina le frecce per ridimensionare, il cerchio blu per ruotare. Clicca altrove per confermare.",
+        "inst-wall-edit": "Trascina le frecce per ridimensionare, il cerchio blu per ruotare, oppure trascina il corpo del muro per spostarlo. Clicca altrove per confermare.",
         "inst-bar": "Modo Barra Rigida: Clicca sul primo punto e poi sul secondo.",
         "inst-rope": "Modo Corda: Clicca sul primo punto e poi sul secondo.",
         "inst-chain": "Modo Catena Rigida: Clicca sul primo punto e poi sul secondo.",
@@ -395,6 +395,8 @@ let isPaused = false;
 let ropeIdCounter = 0;
 let editingWallBody = null;
 let resizingWallHandle = null;
+let isDraggingWall = false;
+let wallDragOffset = planck.Vec2(0, 0);
 let lastTapTime = 0;
 let lastTapBody = null;
 const DOUBLE_TAP_MS = 350;
@@ -445,6 +447,7 @@ function updateCursor() {
 function selectBlock(type) {
     editingWallBody = null;
     resizingWallHandle = null;
+    isDraggingWall = false;
     if (currentMode === "spawn" && currentChoice === type) {
         currentMode = "none";
         document.querySelectorAll(".block-btn").forEach((btn) => btn.classList.remove("active"));
@@ -464,6 +467,7 @@ function selectBlock(type) {
 function setMode(mode) {
     editingWallBody = null;
     resizingWallHandle = null;
+    isDraggingWall = false;
     if (currentMode === mode) {
         currentMode = "none";
         linkStartBody = null;
@@ -681,22 +685,6 @@ canvas.addEventListener("pointerdown", (event) => {
         if (clickedBody) break;
     }
 
-    const now = Date.now();
-    const isDoubleTapOnWall =
-        clickedBody &&
-        clickedBody.wallHalfW !== undefined &&
-        lastTapBody === clickedBody &&
-        now - lastTapTime < DOUBLE_TAP_MS;
-    lastTapTime = now;
-    lastTapBody = clickedBody || null;
-
-    if (isDoubleTapOnWall) {
-        editingWallBody = clickedBody;
-        resizingWallHandle = null;
-        updateInstructionText();
-        return;
-    }
-
     if (editingWallBody) {
         const handles = getWallHandles(editingWallBody);
         let hitSide = null;
@@ -711,8 +699,45 @@ canvas.addEventListener("pointerdown", (event) => {
             resizingWallHandle = { side: hitSide };
             return;
         }
+
+        let clickedInsideEditingWall = false;
+        for (let f = editingWallBody.getFixtureList(); f; f = f.getNext()) {
+            if (f.testPoint(mousePos)) {
+                clickedInsideEditingWall = true;
+                break;
+            }
+        }
+
+        if (clickedInsideEditingWall) {
+            isDraggingWall = true;
+            wallDragOffset = planck.Vec2(
+                editingWallBody.getPosition().x - mousePos.x,
+                editingWallBody.getPosition().y - mousePos.y
+            );
+            return;
+        }
+
+        // Clic fuori dal muro in fase di editing: chiude l'editing e interrompe l'esecuzione del click corrente
         editingWallBody = null;
         updateInstructionText();
+        return;
+    }
+
+    const now = Date.now();
+    const isDoubleTapOnWall =
+        clickedBody &&
+        clickedBody.wallHalfW !== undefined &&
+        lastTapBody === clickedBody &&
+        now - lastTapTime < DOUBLE_TAP_MS;
+    lastTapTime = now;
+    lastTapBody = clickedBody || null;
+
+    if (isDoubleTapOnWall) {
+        editingWallBody = clickedBody;
+        resizingWallHandle = null;
+        isDraggingWall = false;
+        updateInstructionText();
+        return;
     }
 
     if (currentMode === "none") {
@@ -817,6 +842,7 @@ canvas.addEventListener("pointerdown", (event) => {
                 if (clickedBody === editingWallBody) {
                     editingWallBody = null;
                     resizingWallHandle = null;
+                    isDraggingWall = false;
                 }
                 world.destroyBody(clickedBody);
             }
@@ -1059,6 +1085,16 @@ canvas.addEventListener("pointermove", (event) => {
     const mousePos = planck.Vec2(event.clientX / SCALE, event.clientY / SCALE);
     if (mouseJoint) mouseJoint.setTarget(mousePos);
 
+    if (isDraggingWall && editingWallBody) {
+        editingWallBody.setPosition(planck.Vec2(
+            mousePos.x + wallDragOffset.x,
+            mousePos.y + wallDragOffset.y
+        ));
+        editingWallBody.setLinearVelocity(planck.Vec2(0, 0));
+        editingWallBody.setAngularVelocity(0);
+        return;
+    }
+
     if (resizingWallHandle && editingWallBody) {
         if (resizingWallHandle.side === "rotate") {
             rotateWall(editingWallBody, mousePos);
@@ -1074,6 +1110,7 @@ window.addEventListener("pointerup", () => {
         mouseJoint = null;
     }
     resizingWallHandle = null;
+    isDraggingWall = false;
 });
 
 canvas.addEventListener(
@@ -1205,6 +1242,7 @@ function clearScene() {
     linkStartPoint = null;
     editingWallBody = null;
     resizingWallHandle = null;
+    isDraggingWall = false;
     lastTapBody = null;
     lastTapTime = 0;
     clearScore();
