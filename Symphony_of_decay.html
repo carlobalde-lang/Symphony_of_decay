@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="it">
+<html lang="en">
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
@@ -15,22 +15,59 @@
 
         <div id="ui">
             <h1>Symphony of Decay</h1>
-            <p id="instruction-mode">Trascina per muovere. Clicca a vuoto per spawnare.</p>
-            <div id="score-box">Armonia: <span id="score" style="color: #2ed573">0</span></div>
-            <div id="body-count-box">Oggetti: <span id="body-count">0</span> / <span id="body-count-max">150</span></div>
+            <p id="instruction-mode" data-i18n="inst-default">Drag to move. Click on empty space to spawn.</p>
+            <div id="score-box">
+                <span data-i18n="harmony">Harmony</span>: <span id="score" style="color: #2ed573">0</span>
+            </div>
+            <div id="body-count-box">
+                <span data-i18n="objects">Objects</span>: <span id="body-count">0</span> /
+                <span id="body-count-max">150</span>
+            </div>
         </div>
 
         <div id="toolbox" class="collapsed">
+            <!-- Language Selector Flags -->
+            <div
+                class="tool-group"
+                style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    background: rgba(0, 0, 0, 0.1);
+                    padding: 8px;
+                    border-radius: 6px;
+                ">
+                <label style="margin: 0" data-i18n="language">Language:</label>
+                <div>
+                    <button
+                        class="sub-btn"
+                        onclick="setLanguage('en')"
+                        style="padding: 4px 8px; font-size: 16px; cursor: pointer">
+                        🇬🇧
+                    </button>
+                    <button
+                        class="sub-btn"
+                        onclick="setLanguage('it')"
+                        style="padding: 4px 8px; font-size: 16px; cursor: pointer">
+                        🇮🇹
+                    </button>
+                </div>
+            </div>
+
             <div class="menu-controls">
-                <button class="action-btn" onclick="clearScene()">🧹 Pulisci</button>
-                <button class="action-btn" id="btn-pause-play" onclick="togglePause()">⏸️ Pausa</button>
-                <button class="action-btn primary" onclick="triggerDecay()">⚡ GLITCH</button>
+                <button class="action-btn" onclick="clearScene()" data-i18n="btn-clear">🧹 Clear</button>
+                <button class="action-btn" id="btn-pause-play" onclick="togglePause()" data-i18n="btn-pause">
+                    ⏸️ Pause
+                </button>
+                <button class="action-btn primary" onclick="triggerDecay()" data-i18n="btn-glitch">⚡ GLITCH</button>
             </div>
 
             <div class="tool-group">
-                <label
-                    >Seleziona Oggetto:
-                    <button class="sub-btn" id="theme-toggle" onclick="toggleTheme()">🌓 Tema</button>
+                <label>
+                    <span data-i18n="select-object">Select Object</span>:
+                    <button class="sub-btn" id="theme-toggle" onclick="toggleTheme()" data-i18n="btn-theme">
+                        🌓 Theme
+                    </button>
                 </label>
                 <div class="block-selector">
                     <button class="block-btn active" id="btn-bass" onclick="selectBlock('bass')">Orolite</button>
@@ -39,27 +76,45 @@
                     <button class="block-btn" id="btn-rubber" onclick="selectBlock('rubber')">Septifor</button>
                     <button class="block-btn" id="btn-high" onclick="selectBlock('high')">Octavox</button>
                     <button class="block-btn" id="btn-neon" onclick="selectBlock('neon')">Astral</button>
-                    <button class="block-btn" id="btn-wall" onclick="selectBlock('wall')">Muro</button>
+                    <button class="block-btn" id="btn-wall" onclick="selectBlock('wall')" data-i18n="block-wall">
+                        Wall
+                    </button>
                 </div>
             </div>
 
             <div class="tool-group">
-                <label>Scala Musicale:</label>
+                <label data-i18n="timbre-label">Timbre / Sound Type:</label>
+                <select id="timbre-select" class="scene-select" onchange="setTimbreMode(this.value)"></select>
+            </div>
+
+            <div class="tool-group">
+                <label data-i18n="scale-label">Musical Scale:</label>
                 <select id="scale-select" class="scene-select" onchange="changeScale(this.value)"></select>
             </div>
 
             <div class="tool-group">
-                <label>Strumenti Interattivi:</label>
+                <label data-i18n="interactive-tools">Interactive Tools:</label>
                 <div class="special-tools">
-                    <button class="special-btn" id="btn-rope" onclick="setMode('rope')">🧵 Corda</button>
-                    <button class="special-btn" id="btn-chain" onclick="setMode('chain')">⛓️ Catena Rigida</button>
-                    <button class="special-btn" id="btn-bar" onclick="setMode('bar')">🔗 Barra</button>
-                    <button class="special-btn" id="btn-eraser" onclick="setMode('eraser')">🧹 Gomma</button>
+                    <button class="special-btn" id="btn-rope" onclick="setMode('rope')" data-i18n="tool-rope">
+                        🧵 Rope
+                    </button>
+                    <button class="special-btn" id="btn-chain" onclick="setMode('chain')" data-i18n="tool-chain">
+                        ⛓️ Rigid Chain
+                    </button>
+                    <button class="special-btn" id="btn-bar" onclick="setMode('bar')" data-i18n="tool-bar">
+                        🔗 Bar
+                    </button>
+                    <button class="special-btn" id="btn-eraser" onclick="setMode('eraser')" data-i18n="tool-eraser">
+                        🧹 Eraser
+                    </button>
                 </div>
             </div>
 
             <div class="tool-group">
-                <label>Numero Alberi Sfondo: <span id="val-trees-count" class="slider-val">12</span></label>
+                <label
+                    ><span data-i18n="bg-trees">Background Trees Count</span>:
+                    <span id="val-trees-count" class="slider-val">12</span></label
+                >
                 <input
                     type="number"
                     id="input-trees-count"
@@ -70,7 +125,10 @@
             </div>
 
             <div class="tool-group" style="background: rgba(255, 0, 85, 0.05); padding: 6px; border-radius: 6px">
-                <label>Corda/Catena - Segmenti: <span id="val-rope-seg" class="slider-val">12</span></label>
+                <label
+                    ><span data-i18n="rope-segments">Rope/Chain Segments</span>:
+                    <span id="val-rope-seg" class="slider-val">12</span></label
+                >
                 <input
                     type="range"
                     id="slider-rope-seg"
@@ -82,7 +140,7 @@
             </div>
 
             <div class="tool-group">
-                <label>Fisica - Gravità Y: <span id="val-gravity" class="slider-val">9.8</span></label>
+                <label><span data-i18n="gravity-label">Physics - Gravity Y</span>: <span id="val-gravity" class="slider-val">9.8</span></label>
                 <input
                     type="range"
                     id="slider-gravity"
@@ -94,7 +152,10 @@
             </div>
 
             <div class="tool-group">
-                <label>Fisica - Attrito Aria: <span id="val-drag" class="slider-val">0.02</span></label>
+                <label
+                    ><span data-i18n="air-drag">Physics - Air Drag</span>:
+                    <span id="val-drag" class="slider-val">0.02</span></label
+                >
                 <input
                     type="range"
                     id="slider-drag"
@@ -106,7 +167,10 @@
             </div>
 
             <div class="tool-group">
-                <label>Vento - Velocità: <span id="val-wind" class="slider-val">0.0</span></label>
+                <label
+                    ><span data-i18n="wind-speed">Wind - Speed</span>:
+                    <span id="val-wind" class="slider-val">0.0</span></label
+                >
                 <input
                     type="range"
                     id="slider-wind"
@@ -118,7 +182,10 @@
             </div>
 
             <div class="tool-group">
-                <label>Vento - Irregolarità: <span id="val-turbulence" class="slider-val">0.0</span></label>
+                <label
+                    ><span data-i18n="wind-turb">Wind - Turbulence</span>:
+                    <span id="val-turbulence" class="slider-val">0.0</span></label
+                >
                 <input
                     type="range"
                     id="slider-turbulence"
@@ -129,24 +196,31 @@
                     oninput="updatePhysics()" />
             </div>
 
-            <button class="sub-btn" onclick="resetPhysics()">↩️ Reset Fisica</button>
+            <button class="sub-btn" onclick="resetPhysics()" data-i18n="reset-physics">↩️ Reset Physics</button>
 
             <div class="tool-group" style="margin-top: 4px">
-                <label>Scene Salvate:</label>
+                <label data-i18n="saved-scenes">Saved Scenes:</label>
                 <select id="scene-select" class="scene-select"></select>
                 <div class="menu-controls">
-                    <button class="action-btn" onclick="saveScene()">💾 Salva</button>
-                    <button class="action-btn" onclick="loadScene()">📂 Carica</button>
+                    <button class="action-btn" onclick="saveScene()" data-i18n="btn-save">💾 Save</button>
+                    <button class="action-btn" onclick="loadScene()" data-i18n="btn-load">📂 Load</button>
                 </div>
-                <button class="sub-btn" onclick="deleteScene()" style="width: 100%; margin-top: 4px">
-                    🗑️ Elimina Selezionata
+                <button
+                    class="sub-btn"
+                    onclick="deleteScene()"
+                    style="width: 100%; margin-top: 4px"
+                    data-i18n="btn-delete">
+                    🗑️ Delete Selected
                 </button>
             </div>
 
             <div class="tool-group" style="margin-top: 4px">
-                <label>Mixer Volumi: <button class="sub-btn" onclick="resetMixer()">Reset</button></label>
+                <label
+                    ><span data-i18n="volume-mixer">Volume Mixer</span>:
+                    <button class="sub-btn" onclick="resetMixer()" data-i18n="btn-reset">Reset</button></label
+                >
                 <div class="mixer-item" style="margin-bottom: 6px">
-                    <label>Master Generale</label>
+                    <label data-i18n="master-vol">Master Volume</label>
                     <input
                         type="range"
                         id="vol-master"
@@ -158,8 +232,7 @@
                 </div>
                 <div class="mixer-grid">
                     <div class="mixer-item">
-                        <label>Orolite</label
-                        ><input
+                        <label>Orolite</label><input
                             type="range"
                             id="vol-bass"
                             min="0"
@@ -169,8 +242,7 @@
                             oninput="updateVolume('bass', this.value)" />
                     </div>
                     <div class="mixer-item">
-                        <label>Pentacore</label
-                        ><input
+                        <label>Pentacore</label><input
                             type="range"
                             id="vol-wood"
                             min="0"
@@ -180,8 +252,7 @@
                             oninput="updateVolume('wood', this.value)" />
                     </div>
                     <div class="mixer-item">
-                        <label>Hexarun</label
-                        ><input
+                        <label>Hexarun</label><input
                             type="range"
                             id="vol-mid"
                             min="0"
@@ -191,8 +262,7 @@
                             oninput="updateVolume('mid', this.value)" />
                     </div>
                     <div class="mixer-item">
-                        <label>Septifor</label
-                        ><input
+                        <label>Septifor</label><input
                             type="range"
                             id="vol-rubber"
                             min="0"
@@ -202,8 +272,7 @@
                             oninput="updateVolume('rubber', this.value)" />
                     </div>
                     <div class="mixer-item">
-                        <label>Octavox</label
-                        ><input
+                        <label>Octavox</label><input
                             type="range"
                             id="vol-high"
                             min="0"
@@ -224,8 +293,7 @@
                             oninput="updateVolume('neon', this.value)" />
                     </div>
                     <div class="mixer-item">
-                        <label>Muro</label
-                        ><input
+                        <label data-i18n="block-wall">Wall</label><input
                             type="range"
                             id="vol-wall"
                             min="0"

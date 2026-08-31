@@ -1,12 +1,185 @@
 const SCALE = 40.0;
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 const PI = Math.PI;
-const PHI = (1 + Math.sqrt(5)) / 2;
 const baseRoot = 110.0; // A2, radice comune di tutte le scale
 
-// Pattern di intervalli (in semitoni dalla radice) delle scale musicali più
-// diffuse. Ogni nota è generata con l'accordatura equabile standard:
-// freq = radice * 2^(semitoni/12).
+// Localizzazione completa dell'interfaccia (EN / IT)
+const TRANSLATIONS = {
+    en: {
+        harmony: "Harmony",
+        objects: "Objects",
+        language: "Language:",
+        "btn-clear": "🧹 Clear",
+        "btn-pause": "⏸️ Pause",
+        "btn-play": "▶️ Play",
+        "btn-glitch": "⚡ GLITCH",
+        "select-object": "Select Object",
+        "btn-theme": "🌓 Theme",
+        "block-wall": "Wall",
+        "timbre-label": "Timbre / Sound Type:",
+        "scale-label": "Musical Scale:",
+        "interactive-tools": "Interactive Tools:",
+        "tool-rope": "🧵 Rope",
+        "tool-chain": "⛓️ Rigid Chain",
+        "tool-bar": "🔗 Bar",
+        "tool-eraser": "🧹 Eraser",
+        "bg-trees": "Background Trees Count",
+        "rope-segments": "Rope/Chain Segments",
+        "gravity-label": "Physics - Gravity Y",
+        "air-drag": "Physics - Air Drag",
+        "wind-speed": "Wind - Speed",
+        "wind-turb": "Wind - Turbulence",
+        "reset-physics": "↩️ Reset Physics",
+        "saved-scenes": "Saved Scenes:",
+        "btn-save": "💾 Save",
+        "btn-load": "📂 Load",
+        "btn-delete": "🗑️ Delete Selected",
+        "volume-mixer": "Volume Mixer",
+        "btn-reset": "Reset",
+        "master-vol": "Master Volume",
+        "inst-default": "Drag to move. Click on empty space to spawn.",
+        "inst-free": "Free Mode: Drag only to move objects.",
+        "inst-paused": "Simulation paused.",
+        "inst-active": "Simulation active.",
+        "inst-wall": "Wall Mode: Click empty space to create a wall. Drag arrows to resize, blue circle to rotate. Click elsewhere to confirm. Double tap an existing wall to edit it again.",
+        "inst-wall-edit": "Drag arrows to resize, blue circle to rotate. Click elsewhere to confirm.",
+        "inst-bar": "Rigid Bar Mode: Click first point, then second point.",
+        "inst-rope": "Rope Mode: Click first point, then second point.",
+        "inst-chain": "Rigid Chain Mode: Click first point, then second point.",
+        "inst-eraser": "Eraser Mode: Click an object, bar, or rope to delete it.",
+        "limit-reached": "⚠️ Limit of {max} objects reached: delete something before continuing",
+        "no-scenes": "(no saved scenes)"
+    },
+    it: {
+        harmony: "Armonia",
+        objects: "Oggetti",
+        language: "Lingua:",
+        "btn-clear": "🧹 Pulisci",
+        "btn-pause": "⏸️ Pausa",
+        "btn-play": "▶️ Play",
+        "btn-glitch": "⚡ GLITCH",
+        "select-object": "Seleziona Oggetto",
+        "btn-theme": "🌓 Tema",
+        "block-wall": "Muro",
+        "timbre-label": "Timbro / Tipo Suono:",
+        "scale-label": "Scala Musicale:",
+        "interactive-tools": "Strumenti Interattivi:",
+        "tool-rope": "🧵 Corda",
+        "tool-chain": "⛓️ Catena Rigida",
+        "tool-bar": "🔗 Barra",
+        "tool-eraser": "🧹 Gomma",
+        "bg-trees": "Conteggio Alberi Sfondo",
+        "rope-segments": "Segmenti Corda/Catena",
+        "gravity-label": "Fisica - Gravità Y",
+        "air-drag": "Fisica - Attrito Aria",
+        "wind-speed": "Vento - Velocità",
+        "wind-turb": "Vento - Turbolenza",
+        "reset-physics": "↩️ Ripristina Fisica",
+        "saved-scenes": "Scene Salvate:",
+        "btn-save": "💾 Salva",
+        "btn-load": "📂 Carica",
+        "btn-delete": "🗑️ Elimina Selezionata",
+        "volume-mixer": "Mixer Volume",
+        "btn-reset": "Reset",
+        "master-vol": "Volume Principale",
+        "inst-default": "Trascina per muovere. Clicca a vuoto per spawnare.",
+        "inst-free": "Modalità Libera: Trascina solo per muovere gli oggetti.",
+        "inst-paused": "Simulazione in PAUSA.",
+        "inst-active": "Simulazione attiva.",
+        "inst-wall": "Modo Muro: Clicca a vuoto per creare un muro. Trascina le frecce per ridimensionarlo, il cerchio blu per ruotarlo. Clicca altrove per confermare. Doppio tap su un muro esistente per modificarlo di nuovo.",
+        "inst-wall-edit": "Trascina le frecce per ridimensionare, il cerchio blu per ruotare. Clicca altrove per confermare.",
+        "inst-bar": "Modo Barra Rigida: Clicca sul primo punto e poi sul secondo.",
+        "inst-rope": "Modo Corda: Clicca sul primo punto e poi sul secondo.",
+        "inst-chain": "Modo Catena Rigida: Clicca sul primo punto e poi sul secondo.",
+        "inst-eraser": "Modo Gomma: Clicca un oggetto, una barra o una corda per cancellarla.",
+        "limit-reached": "⚠️ Limite di {max} oggetti raggiunto: cancella qualcosa prima di continuare",
+        "no-scenes": "(nessuna scena salvata)"
+    }
+};
+
+let currentLanguage = 'en';
+
+function t(key, replacements = {}) {
+    let text = TRANSLATIONS[currentLanguage][key] || TRANSLATIONS['en'][key] || key;
+    for (const k in replacements) {
+        text = text.replace(`{${k}}`, replacements[k]);
+    }
+    return text;
+}
+
+function updateUILanguage() {
+    document.querySelectorAll("[data-i18n]").forEach(el => {
+        const key = el.getAttribute("data-i18n");
+        if (key) {
+            el.textContent = t(key);
+        }
+    });
+    updateInstructionText();
+    refreshSceneList();
+}
+
+function updateInstructionText() {
+    const el = document.getElementById("instruction-mode");
+    if (!el) return;
+    if (isPaused) {
+        el.innerText = t("inst-paused");
+        return;
+    }
+    if (editingWallBody) {
+        el.innerText = t("inst-wall-edit");
+        return;
+    }
+    if (currentMode === "none") {
+        el.innerText = t("inst-free");
+    } else if (currentMode === "spawn") {
+        if (currentChoice === "wall") {
+            el.innerText = t("inst-wall");
+        } else {
+            el.innerText = t("inst-default");
+        }
+    } else if (currentMode === "bar") {
+        el.innerText = t("inst-bar");
+    } else if (currentMode === "rope") {
+        el.innerText = t("inst-rope");
+    } else if (currentMode === "chain") {
+        el.innerText = t("inst-chain");
+    } else if (currentMode === "eraser") {
+        el.innerText = t("inst-eraser");
+    }
+}
+
+// Set esteso di timbriche e strumenti virtuali
+const SOUND_TIMBRES = {
+    sine: { name: "🌙 Dolce / Eterea (Seno)", type1: "sine", type2: "sine", sub: true, filterType: "lowpass", cutoffMult: 2.5, resonance: 1.0 },
+    square: { name: "👾 Chiptune / Retro 8-bit (Square)", type1: "square", type2: "sawtooth", sub: true, filterType: "lowpass", cutoffMult: 3.5, resonance: 2.5 },
+    sawtooth: { name: "🎻 Synth Lead / Corda (Saw)", type1: "sawtooth", type2: "triangle", sub: false, filterType: "lowpass", cutoffMult: 3.0, resonance: 1.5 },
+    triangle: { name: "🪈 Flauto / Acustico (Triangle)", type1: "triangle", type2: "sine", sub: false, filterType: "lowpass", cutoffMult: 2.0, resonance: 0.8 },
+    organ: { name: "⛪ Organo da Chiesa (Organ)", type1: "sine", type2: "square", sub: true, filterType: "bandpass", cutoffMult: 4.0, resonance: 3.0 },
+    brass: { name: "🎺 Sezione Ottoni (Brass)", type1: "sawtooth", type2: "square", sub: false, filterType: "lowpass", cutoffMult: 3.8, resonance: 2.0 },
+    pad: { name: "🌌 Atmosfera / Ambient Pad", type1: "sine", type2: "triangle", sub: true, filterType: "lowpass", cutoffMult: 1.5, resonance: 0.5 },
+    bell: { name: "🔔 Campana / Cristallo (Bell)", type1: "sine", type2: "sawtooth", sub: false, filterType: "highpass", cutoffMult: 1.2, resonance: 4.0 }
+};
+let currentTimbreMode = "sine";
+
+function setTimbreMode(mode) {
+    if (SOUND_TIMBRES[mode]) {
+        currentTimbreMode = mode;
+    }
+}
+
+function populateTimbreSelect() {
+    const sel = document.getElementById("timbre-select");
+    if (!sel) return;
+    sel.innerHTML = "";
+    for (const key in SOUND_TIMBRES) {
+        const opt = document.createElement("option");
+        opt.value = key;
+        opt.textContent = SOUND_TIMBRES[key].name;
+        if (key === currentTimbreMode) opt.selected = true;
+        sel.appendChild(opt);
+    }
+}
+
 const SCALE_PATTERNS = {
     major: [0, 2, 4, 5, 7, 9, 11],
     naturalMinor: [0, 2, 3, 5, 7, 8, 10],
@@ -19,23 +192,22 @@ const SCALE_PATTERNS = {
     wholeTone: [0, 2, 4, 6, 8, 10],
     chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
 };
-const SCALE_NAMES_IT = {
-    pentatonicMinor: "Pentatonica Minore",
-    pentatonicMajor: "Pentatonica Maggiore",
-    major: "Maggiore",
-    naturalMinor: "Minore Naturale",
-    harmonicMinor: "Minore Armonica",
-    dorian: "Dorica",
-    mixolydian: "Misolidia",
-    blues: "Blues",
-    wholeTone: "Toni Interi",
-    chromatic: "Cromatica"
-};
-let currentScaleMode = "pentatonicMinor"; // pochi semitoni dissonanti, suona bene quasi sempre
 
-// Registro (grado scala centrale + ampiezza di oscillazione) di ciascun
-// materiale: mantiene il carattere sonoro precedente (bass grave, neon
-// acuto, ecc.) restando però sempre dentro la scala scelta.
+const SCALE_NAMES = {
+    pentatonicMinor: { it: "Pentatonica Minore", en: "Minor Pentatonic" },
+    pentatonicMajor: { it: "Pentatonica Maggiore", en: "Major Pentatonic" },
+    major: { it: "Maggiore", en: "Major" },
+    naturalMinor: { it: "Minore Naturale", en: "Natural Minor" },
+    harmonicMinor: { it: "Minore Armonica", en: "Harmonic Minor" },
+    dorian: { it: "Dorica", en: "Dorian" },
+    mixolydian: { it: "Misolidia", en: "Mixolydian" },
+    blues: { it: "Blues", en: "Blues" },
+    wholeTone: { it: "Toni Interi", en: "Whole Tone" },
+    chromatic: { it: "Cromatica", en: "Chromatic" }
+};
+
+let currentScaleMode = "pentatonicMinor";
+
 const materialRegisters = {
     bass: { centerDegree: 0, range: 3 },
     wood: { centerDegree: 4, range: 3 },
@@ -46,7 +218,6 @@ const materialRegisters = {
     wall: { centerDegree: 2, range: 2 }
 };
 
-// Stato melodico corrente (grado scala) per ciascun materiale.
 let melodicDegree = {};
 for (const key in materialRegisters) melodicDegree[key] = materialRegisters[key].centerDegree;
 
@@ -59,10 +230,6 @@ function degreeToFrequency(degreeIndex) {
     return baseRoot * Math.pow(2, semitone / 12);
 }
 
-// Genera la prossima nota per un materiale con un random walk limitato:
-// piccolo spostamento casuale di grado in grado (mai un salto arbitrario),
-// con una leggera spinta di richiamo verso il centro del registro così la
-// melodia non "scappa" mai fuori dal carattere sonoro del materiale.
 function nextNoteFrequency(type) {
     const reg = materialRegisters[type] || materialRegisters.wall;
     let degree = melodicDegree[type] !== undefined ? melodicDegree[type] : reg.centerDegree;
@@ -78,21 +245,32 @@ function nextNoteFrequency(type) {
 function setScaleMode(mode) {
     if (!SCALE_PATTERNS[mode]) return;
     currentScaleMode = mode;
-    // Riallinea lo stato melodico ai centri di registro: cambiare scala a
-    // metà brano non lascia gradi "orfani" fuori pattern.
     for (const key in materialRegisters) melodicDegree[key] = materialRegisters[key].centerDegree;
+}
+
+function changeScale(mode) {
+    setScaleMode(mode);
 }
 
 function populateScaleSelect() {
     const sel = document.getElementById("scale-select");
     if (!sel) return;
     sel.innerHTML = "";
-    for (const key in SCALE_NAMES_IT) {
+    for (const key in SCALE_NAMES) {
         const opt = document.createElement("option");
         opt.value = key;
-        opt.textContent = SCALE_NAMES_IT[key];
+        opt.textContent = SCALE_NAMES[key][currentLanguage] || SCALE_NAMES[key].en;
         if (key === currentScaleMode) opt.selected = true;
         sel.appendChild(opt);
+    }
+}
+
+function setLanguage(lang) {
+    if (TRANSLATIONS[lang]) {
+        currentLanguage = lang;
+        populateScaleSelect();
+        populateTimbreSelect();
+        updateUILanguage();
     }
 }
 
@@ -126,6 +304,7 @@ function playMixedSound(typeA, typeB, velocity) {
     const now = audioCtx.currentTime;
     const primaryType = typeA;
     const secondaryType = typeB && typeB !== typeA ? typeB : null;
+    const timbre = SOUND_TIMBRES[currentTimbreMode] || SOUND_TIMBRES.sine;
 
     const freq1 = nextNoteFrequency(primaryType);
 
@@ -134,31 +313,37 @@ function playMixedSound(typeA, typeB, velocity) {
     const gain1 = audioCtx.createGain();
     const filter1 = audioCtx.createBiquadFilter();
 
-    osc1.type = "sine";
+    osc1.type = timbre.type1;
     osc1.frequency.setValueAtTime(freq1, now);
+    
     oscSub.type = "sine";
     oscSub.frequency.setValueAtTime(freq1 * 0.5, now);
 
-    filter1.type = "lowpass";
-    filter1.frequency.setValueAtTime(Math.min(freq1 * 1.8, 1600), now);
-    filter1.Q.setValueAtTime(0.5, now);
+    filter1.type = timbre.filterType || "lowpass";
+    filter1.frequency.setValueAtTime(Math.min(freq1 * timbre.cutoffMult, 5000), now);
+    filter1.Q.setValueAtTime(timbre.resonance, now);
 
     const baseVol1 = volumes[primaryType] !== undefined ? volumes[primaryType] : 0.8;
     const vol1 = Math.min(0.25, velocity * 0.03) * baseVol1 * masterVolume;
 
+    const duration = currentTimbreMode === "pad" ? 3.5 : (currentTimbreMode === "bell" ? 3.0 : 2.5);
+
     gain1.gain.setValueAtTime(0, now);
-    gain1.gain.linearRampToValueAtTime(vol1, now + 0.12);
-    gain1.gain.exponentialRampToValueAtTime(0.0001, now + 2.5);
+    gain1.gain.linearRampToValueAtTime(vol1, now + (currentTimbreMode === "pad" ? 0.4 : 0.1));
+    gain1.gain.exponentialRampToValueAtTime(0.0001, now + duration);
 
     osc1.connect(filter1);
-    oscSub.connect(filter1);
+    if (timbre.sub) {
+        oscSub.connect(filter1);
+        oscSub.start(now);
+        oscSub.stop(now + duration + 0.1);
+    }
+    
     filter1.connect(gain1);
     gain1.connect(audioCtx.destination);
 
     osc1.start(now);
-    oscSub.start(now);
-    osc1.stop(now + 2.6);
-    oscSub.stop(now + 2.6);
+    osc1.stop(now + duration + 0.1);
 
     if (secondaryType) {
         const freq2 = nextNoteFrequency(secondaryType);
@@ -166,24 +351,23 @@ function playMixedSound(typeA, typeB, velocity) {
         const gain2 = audioCtx.createGain();
         const filter2 = audioCtx.createBiquadFilter();
 
-        osc2.type = "sine";
-        osc2.frequency.setValueAtTime(freq2 / 2, now);
+        osc2.type = timbre.type2;
+        osc2.frequency.setValueAtTime(freq2 / (currentTimbreMode === "organ" ? 1 : 2), now);
         filter2.type = "lowpass";
-        filter2.frequency.setValueAtTime(1400, now);
+        filter2.frequency.setValueAtTime(2800, now);
 
-        const baseVol2 = volumes[secondaryType] !== undefined ? volumes[secondaryType] : 0.8;
-        const vol2 = vol1 * 0.35;
+        const vol2 = vol1 * 0.4;
 
         gain2.gain.setValueAtTime(0, now);
-        gain2.gain.linearRampToValueAtTime(vol2, now + 0.05);
-        gain2.gain.exponentialRampToValueAtTime(0.0001, now + 2.2);
+        gain2.gain.linearRampToValueAtTime(vol2, now + 0.08);
+        gain2.gain.exponentialRampToValueAtTime(0.0001, now + (duration - 0.3));
 
         osc2.connect(filter2);
         filter2.connect(gain2);
         gain2.connect(audioCtx.destination);
 
         osc2.start(now);
-        osc2.stop(now + 2.3);
+        osc2.stop(now + duration);
     }
 
     setTimeout(() => {
@@ -239,12 +423,11 @@ function togglePause() {
     isPaused = !isPaused;
     const btn = document.getElementById("btn-pause-play");
     if (isPaused) {
-        btn.innerText = "▶️ Play";
-        document.getElementById("instruction-mode").innerText = "Simulazione in PAUSA.";
+        btn.innerText = t("btn-play");
     } else {
-        btn.innerText = "⏸️ Pausa";
-        document.getElementById("instruction-mode").innerText = "Simulazione attiva.";
+        btn.innerText = t("btn-pause");
     }
+    updateInstructionText();
 }
 
 function updateCursor() {
@@ -265,8 +448,6 @@ function selectBlock(type) {
     if (currentMode === "spawn" && currentChoice === type) {
         currentMode = "none";
         document.querySelectorAll(".block-btn").forEach((btn) => btn.classList.remove("active"));
-        document.getElementById("instruction-mode").innerText =
-            "Modalità Libera: Trascina solo per muovere gli oggetti.";
     } else {
         currentMode = "spawn";
         currentChoice = type;
@@ -275,15 +456,9 @@ function selectBlock(type) {
         document.querySelectorAll(".block-btn").forEach((btn) => btn.classList.remove("active"));
         document.querySelectorAll(".special-btn").forEach((btn) => btn.classList.remove("active"));
         document.getElementById("btn-" + type).classList.add("active");
-        if (type === "wall") {
-            document.getElementById("instruction-mode").innerText =
-                "Modo Muro: Clicca a vuoto per creare un muro. Trascina le frecce per ridimensionarlo, il cerchio blu per ruotarlo. Clicca altrove per confermare. Doppio tap su un muro esistente per modificarlo di nuovo.";
-        } else {
-            document.getElementById("instruction-mode").innerText =
-                "Trascina per muovere. Clicca a vuoto per spawnare.";
-        }
     }
     updateCursor();
+    updateInstructionText();
 }
 
 function setMode(mode) {
@@ -294,8 +469,6 @@ function setMode(mode) {
         linkStartBody = null;
         linkStartPoint = null;
         document.querySelectorAll(".special-btn").forEach((btn) => btn.classList.remove("active"));
-        document.getElementById("instruction-mode").innerText =
-            "Modalità Libera: Trascina solo per muovere gli oggetti.";
     } else {
         currentMode = mode;
         linkStartBody = null;
@@ -303,22 +476,9 @@ function setMode(mode) {
         document.querySelectorAll(".block-btn").forEach((btn) => btn.classList.remove("active"));
         document.querySelectorAll(".special-btn").forEach((btn) => btn.classList.remove("active"));
         document.getElementById("btn-" + mode).classList.add("active");
-
-        if (mode === "bar") {
-            document.getElementById("instruction-mode").innerText =
-                "Modo Barra Rigida: Clicca sul primo punto e poi sul secondo.";
-        } else if (mode === "rope") {
-            document.getElementById("instruction-mode").innerText =
-                "Modo Corda: Clicca sul primo punto e poi sul secondo.";
-        } else if (mode === "chain") {
-            document.getElementById("instruction-mode").innerText =
-                "Modo Catena Rigida: Clicca sul primo punto e poi sul secondo.";
-        } else if (mode === "eraser") {
-            document.getElementById("instruction-mode").innerText =
-                "Modo Gomma: Clicca un oggetto, una barra o una corda per cancellarla.";
-        }
     }
     updateCursor();
+    updateInstructionText();
 }
 
 const world = planck.World({ gravity: planck.Vec2(0, 9.8) });
@@ -392,7 +552,7 @@ function flashLimitWarning() {
     if (!el) return;
     const original = el.innerText;
     const originalColor = el.style.color;
-    el.innerText = `⚠️ Limite di ${MAX_BODIES} oggetti raggiunto: cancella qualcosa prima di continuare`;
+    el.innerText = t("limit-reached", { max: MAX_BODIES });
     el.style.color = "#ff4757";
     clearTimeout(flashLimitWarning._t);
     flashLimitWarning._t = setTimeout(() => {
@@ -533,8 +693,7 @@ canvas.addEventListener("pointerdown", (event) => {
     if (isDoubleTapOnWall) {
         editingWallBody = clickedBody;
         resizingWallHandle = null;
-        document.getElementById("instruction-mode").innerText =
-            "Trascina le frecce per ridimensionare, il cerchio blu per ruotare. Clicca altrove per confermare.";
+        updateInstructionText();
         return;
     }
 
@@ -553,12 +712,7 @@ canvas.addEventListener("pointerdown", (event) => {
             return;
         }
         editingWallBody = null;
-        if (currentMode === "spawn" && currentChoice === "wall") {
-            document.getElementById("instruction-mode").innerText =
-                "Modo Muro: Clicca a vuoto per creare un muro. Trascina le frecce per ridimensionarlo, il cerchio blu per ruotarlo. Clicca altrove per confermare. Doppio tap su un muro esistente per modificarlo di nuovo.";
-        } else {
-            document.getElementById("instruction-mode").innerText = "Trascina per muovere. Clicca a vuoto per spawnare.";
-        }
+        updateInstructionText();
     }
 
     if (currentMode === "none") {
@@ -600,8 +754,7 @@ canvas.addEventListener("pointerdown", (event) => {
         const newBody = spawnElement(mousePos.x, mousePos.y, currentChoice);
         if (currentChoice === "wall") {
             editingWallBody = newBody;
-            document.getElementById("instruction-mode").innerText =
-                "Trascina le frecce per ridimensionare, il cerchio blu per ruotare. Clicca altrove per confermare.";
+            updateInstructionText();
         }
         return;
     }
@@ -1031,8 +1184,8 @@ function triggerDecay() {
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.type = "sine";
-    osc.frequency.setValueAtTime(baseRoot * PHI, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(baseRoot * PHI * 2, audioCtx.currentTime + 0.6);
+    osc.frequency.setValueAtTime(baseRoot, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(baseRoot, audioCtx.currentTime + 0.6);
     gain.gain.setValueAtTime(0.25 * masterVolume, audioCtx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 1.8);
     osc.connect(gain);
@@ -1063,12 +1216,11 @@ function flashMessage(text, color) {
     const el = document.getElementById("instruction-mode");
     if (!el) return;
     clearTimeout(flashMessageTimeout);
-    const original = el.dataset.baseText || el.innerText;
-    el.dataset.baseText = original;
+    const original = el.innerText;
     el.innerText = text;
     el.style.color = color || "#2ed573";
     flashMessageTimeout = setTimeout(() => {
-        el.innerText = original;
+        updateInstructionText();
         el.style.color = "";
     }, 2200);
 }
@@ -1270,7 +1422,7 @@ function refreshSceneList() {
     sel.innerHTML = "";
     if (names.length === 0) {
         const opt = document.createElement("option");
-        opt.textContent = "(nessuna scena salvata)";
+        opt.textContent = t("no-scenes");
         opt.disabled = true;
         opt.selected = true;
         sel.appendChild(opt);
@@ -1280,26 +1432,25 @@ function refreshSceneList() {
         const opt = document.createElement("option");
         opt.value = name;
         const count = scenes[name].bodies ? scenes[name].bodies.length : 0;
-        opt.textContent = `${name} (${count} oggetti)`;
+        opt.textContent = `${name} (${count} objects)`;
         sel.appendChild(opt);
     });
     if (names.includes(previousValue)) sel.value = previousValue;
 }
 
 function saveScene() {
-    const defaultName =
-        "Scena " + new Date().toLocaleString("it-IT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-    const name = prompt("Nome della scena:", defaultName);
+    const defaultName = "Scene " + new Date().toLocaleString([], { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    const name = prompt("Scene name:", defaultName);
     if (name === null) return;
     const trimmed = name.trim();
     if (!trimmed) {
-        flashMessage("Nome non valido", "#ff4757");
+        flashMessage("Invalid name", "#ff4757");
         return;
     }
     try {
         const scenes = getSavedScenes();
         if (Object.prototype.hasOwnProperty.call(scenes, trimmed)) {
-            if (!confirm(`Esiste già una scena chiamata "${trimmed}". Sovrascriverla?`)) return;
+            if (!confirm(`A scene named "${trimmed}" already exists. Overwrite it?`)) return;
         }
         const data = serializeScene();
         scenes[trimmed] = data;
@@ -1307,9 +1458,9 @@ function saveScene() {
         refreshSceneList();
         const sel = document.getElementById("scene-select");
         if (sel) sel.value = trimmed;
-        flashMessage(`💾 "${trimmed}" salvata (${data.bodies.length} oggetti)`, "#2ed573");
+        flashMessage(`💾 "${trimmed}" saved (${data.bodies.length} objects)`, "#2ed573");
     } catch (e) {
-        flashMessage("⚠️ Salvataggio fallito", "#ff4757");
+        flashMessage("⚠️ Save failed", "#ff4757");
     }
 }
 
@@ -1317,20 +1468,20 @@ function loadScene() {
     const sel = document.getElementById("scene-select");
     const name = sel ? sel.value : null;
     if (!name) {
-        flashMessage("Nessuna scena selezionata", "#ffa502");
+        flashMessage("No scene selected", "#ffa502");
         return;
     }
     const scenes = getSavedScenes();
     const data = scenes[name];
     if (!data) {
-        flashMessage("Scena non trovata", "#ff4757");
+        flashMessage("Scene not found", "#ff4757");
         return;
     }
     try {
         deserializeScene(data);
-        flashMessage(`📂 "${name}" caricata (${data.bodies.length} oggetti)`, "#2ed573");
+        flashMessage(`📂 "${name}" loaded (${data.bodies.length} objects)`, "#2ed573");
     } catch (e) {
-        flashMessage("⚠️ Caricamento fallito: salvataggio incompatibile", "#ff4757");
+        flashMessage("⚠️ Load failed: incompatible save", "#ff4757");
     }
 }
 
@@ -1338,12 +1489,12 @@ function deleteScene() {
     const sel = document.getElementById("scene-select");
     const name = sel ? sel.value : null;
     if (!name) return;
-    if (!confirm(`Eliminare la scena "${name}"?`)) return;
+    if (!confirm(`Delete scene "${name}"?`)) return;
     const scenes = getSavedScenes();
     delete scenes[name];
     localStorage.setItem(SAVE_KEY, JSON.stringify(scenes));
     refreshSceneList();
-    flashMessage(`🗑️ "${name}" eliminata`, "#ffa502");
+    flashMessage(`🗑️ "${name}" deleted`, "#ffa502");
 }
 
 let timeStep = 1 / 60;
@@ -1815,8 +1966,16 @@ resizeCanvas();
 migrateOldSingleSave();
 refreshSceneList();
 populateScaleSelect();
+populateTimbreSelect();
+updateUILanguage();
 
-// Aggiunto listener per intercettare il cambio scala dal menu a tendina
+const timbreSelectEl = document.getElementById("timbre-select");
+if (timbreSelectEl) {
+    timbreSelectEl.addEventListener("change", (e) => {
+        setTimbreMode(e.target.value);
+    });
+}
+
 const scaleSelectEl = document.getElementById("scale-select");
 if (scaleSelectEl) {
     scaleSelectEl.addEventListener("change", (e) => {
