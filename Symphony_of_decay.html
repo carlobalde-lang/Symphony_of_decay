@@ -55,11 +55,16 @@
             </div>
 
             <div class="menu-controls">
-                <button class="action-btn" onclick="clearScene()" data-i18n="btn-clear">🧹 Clear</button>
+                <button class="action-btn" onclick="clearSceneAction()" data-i18n="btn-clear">🧹 Clear</button>
                 <button class="action-btn" id="btn-pause-play" onclick="togglePause()" data-i18n="btn-pause">
                     ⏸️ Pause
                 </button>
                 <button class="action-btn primary" onclick="triggerDecay()" data-i18n="btn-glitch">⚡ GLITCH</button>
+            </div>
+
+            <div class="menu-controls">
+                <button class="sub-btn" id="btn-undo" onclick="undoAction()" data-i18n="btn-undo">↩️ Undo</button>
+                <button class="sub-btn" id="btn-redo" onclick="redoAction()" data-i18n="btn-redo">↪️ Redo</button>
             </div>
 
             <div class="tool-group">
@@ -140,10 +145,7 @@
             </div>
 
             <div class="tool-group">
-                <label
-                    ><span data-i18n="gravity-label">Physics - Gravity Y</span>:
-                    <span id="val-gravity" class="slider-val">9.8</span></label
-                >
+                <label><span data-i18n="gravity-label">Physics - Gravity Y</span>: <span id="val-gravity" class="slider-val">9.8</span></label>
                 <input
                     type="range"
                     id="slider-gravity"
@@ -201,6 +203,61 @@
 
             <button class="sub-btn" onclick="resetPhysics()" data-i18n="reset-physics">↩️ Reset Physics</button>
 
+            <div class="tool-group">
+                <label
+                    ><span data-i18n="reverb-label">Audio - Reverb</span>:
+                    <span id="val-reverb" class="slider-val">0.15</span></label
+                >
+                <input
+                    type="range"
+                    id="slider-reverb"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value="0.15"
+                    oninput="updateEffects()" />
+            </div>
+
+            <div class="tool-group">
+                <label
+                    ><span data-i18n="delay-label">Audio - Delay</span>:
+                    <span id="val-delay" class="slider-val">0.12</span></label
+                >
+                <input
+                    type="range"
+                    id="slider-delay"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value="0.12"
+                    oninput="updateEffects()" />
+            </div>
+
+            <div class="tool-group" style="display: flex; justify-content: space-between; align-items: center">
+                <label style="margin: 0" data-i18n="quantize-label">Rhythmic Quantization</label>
+                <input type="checkbox" id="chk-quantize" onchange="setQuantizeEnabled(this.checked)" />
+            </div>
+
+            <div class="tool-group">
+                <label
+                    ><span data-i18n="bpm-label">Quantize - BPM</span>:
+                    <span id="val-bpm" class="slider-val">120</span></label
+                >
+                <input
+                    type="range"
+                    id="slider-bpm"
+                    min="60"
+                    max="200"
+                    step="1"
+                    value="120"
+                    oninput="setQuantizeBpm(this.value)" />
+            </div>
+
+            <div class="tool-group" style="display: flex; justify-content: space-between; align-items: center">
+                <label style="margin: 0" data-i18n="trail-label">Visual - Motion Trail</label>
+                <input type="checkbox" id="chk-trail" onchange="setTrailEnabled(this.checked)" />
+            </div>
+
             <div class="tool-group" style="margin-top: 4px">
                 <label data-i18n="saved-scenes">Saved Scenes:</label>
                 <select id="scene-select" class="scene-select"></select>
@@ -235,8 +292,7 @@
                 </div>
                 <div class="mixer-grid">
                     <div class="mixer-item">
-                        <label>Orolite</label
-                        ><input
+                        <label>Orolite</label><input
                             type="range"
                             id="vol-bass"
                             min="0"
@@ -246,8 +302,7 @@
                             oninput="updateVolume('bass', this.value)" />
                     </div>
                     <div class="mixer-item">
-                        <label>Pentacore</label
-                        ><input
+                        <label>Pentacore</label><input
                             type="range"
                             id="vol-wood"
                             min="0"
@@ -257,8 +312,7 @@
                             oninput="updateVolume('wood', this.value)" />
                     </div>
                     <div class="mixer-item">
-                        <label>Hexarun</label
-                        ><input
+                        <label>Hexarun</label><input
                             type="range"
                             id="vol-mid"
                             min="0"
@@ -268,8 +322,7 @@
                             oninput="updateVolume('mid', this.value)" />
                     </div>
                     <div class="mixer-item">
-                        <label>Septifor</label
-                        ><input
+                        <label>Septifor</label><input
                             type="range"
                             id="vol-rubber"
                             min="0"
@@ -279,8 +332,7 @@
                             oninput="updateVolume('rubber', this.value)" />
                     </div>
                     <div class="mixer-item">
-                        <label>Octavox</label
-                        ><input
+                        <label>Octavox</label><input
                             type="range"
                             id="vol-high"
                             min="0"
@@ -301,8 +353,7 @@
                             oninput="updateVolume('neon', this.value)" />
                     </div>
                     <div class="mixer-item">
-                        <label data-i18n="block-wall">Wall</label
-                        ><input
+                        <label data-i18n="block-wall">Wall</label><input
                             type="range"
                             id="vol-wall"
                             min="0"
@@ -314,6 +365,12 @@
                 </div>
             </div>
         </div>
-        <script src="script.js"></script>
+        <script src="languages.js"></script>
+        <script src="audio.js"></script>
+        <script src="physics-world.js"></script>
+        <script src="objects.js"></script>
+        <script src="scenes.js"></script>
+        <script src="background.js"></script>
+        <script src="main.js"></script>
     </body>
 </html>

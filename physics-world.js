@@ -1,563 +1,9 @@
+// physics-world.js — Setup mondo Planck.js, canvas, muri, resize, vento, interazioni pointer/mouse
+
 const SCALE = 40.0;
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-const _unlockAudio = () => {
-    if (audioCtx.state === "suspended") audioCtx.resume();
-};
-document.addEventListener("pointerdown", _unlockAudio, { once: true });
-document.addEventListener("keydown", _unlockAudio, { once: true });
-const baseRoot = 110.0; // A2, radice comune di tutte le scale
+
 const CAT_ROPE = 0x0002;
 const CAT_ROPE_MASK = 0xffff & ~0x0002; // non-colla con le corde
-
-// Localizzazione completa dell'interfaccia (EN / IT)
-const TRANSLATIONS = {
-    en: {
-        harmony: "Harmony",
-        objects: "Objects",
-        language: "Language:",
-        "btn-clear": "🧹 Clear",
-        "btn-pause": "⏸️ Pause",
-        "btn-play": "▶️ Play",
-        "btn-glitch": "⚡ GLITCH",
-        "select-object": "Select Object",
-        "btn-theme": "🌓 Theme",
-        "block-wall": "Wall",
-        "timbre-label": "Timbre / Sound Type:",
-        "scale-label": "Musical Scale:",
-        "interactive-tools": "Interactive Tools:",
-        "tool-rope": "🧵 Rope",
-        "tool-chain": "⛓️ Rigid Chain",
-        "tool-bar": "🔗 Bar",
-        "tool-eraser": "🧹 Eraser",
-        "bg-trees": "Background Trees Count",
-        "rope-segments": "Rope/Chain Segments",
-        "gravity-label": "Physics - Gravity Y",
-        "air-drag": "Physics - Air Drag",
-        "wind-speed": "Wind - Speed",
-        "wind-turb": "Wind - Turbulence",
-        "reset-physics": "↩️ Reset Physics",
-        "saved-scenes": "Saved Scenes:",
-        "btn-save": "💾 Save",
-        "btn-load": "📂 Load",
-        "btn-delete": "🗑️ Delete Selected",
-        "volume-mixer": "Volume Mixer",
-        "btn-reset": "Reset",
-        "master-vol": "Master Volume",
-        "inst-default": "Drag to move. Click on empty space to spawn.",
-        "inst-free": "Free Mode: Drag only to move objects.",
-        "inst-paused": "Simulation paused.",
-        "inst-active": "Simulation active.",
-        "inst-wall":
-            "Wall Mode: Click empty space to create a wall. Drag arrows to resize, blue circle to rotate. Click elsewhere to confirm. Double tap an existing wall to edit it again.",
-        "inst-wall-edit":
-            "Drag arrows to resize, blue circle to rotate, or drag the wall body to move it. Click elsewhere to confirm.",
-        "inst-bar": "Rigid Bar Mode: Click first point, then second point.",
-        "inst-rope": "Rope Mode: Click first point, then second point.",
-        "inst-chain": "Rigid Chain Mode: Click first point, then second point.",
-        "inst-eraser": "Eraser Mode: Click an object, bar, or rope to delete it.",
-        "limit-reached": "⚠️ Limit of {max} objects reached: delete something before continuing",
-        "no-scenes": "(no saved scenes)"
-    },
-    it: {
-        harmony: "Armonia",
-        objects: "Oggetti",
-        language: "Lingua:",
-        "btn-clear": "🧹 Pulisci",
-        "btn-pause": "⏸️ Pausa",
-        "btn-play": "▶️ Play",
-        "btn-glitch": "⚡ GLITCH",
-        "select-object": "Seleziona Oggetto",
-        "btn-theme": "🌓 Tema",
-        "block-wall": "Muro",
-        "timbre-label": "Timbro / Tipo Suono:",
-        "scale-label": "Scala Musicale:",
-        "interactive-tools": "Strumenti Interattivi:",
-        "tool-rope": "🧵 Corda",
-        "tool-chain": "⛓️ Catena Rigida",
-        "tool-bar": "🔗 Barra",
-        "tool-eraser": "🧹 Gomma",
-        "bg-trees": "Conteggio Alberi Sfondo",
-        "rope-segments": "Segmenti Corda/Catena",
-        "gravity-label": "Fisica - Gravità Y",
-        "air-drag": "Fisica - Attrito Aria",
-        "wind-speed": "Vento - Velocità",
-        "wind-turb": "Vento - Turbolenza",
-        "reset-physics": "↩️ Ripristina Fisica",
-        "saved-scenes": "Scene Salvate:",
-        "btn-save": "💾 Salva",
-        "btn-load": "📂 Carica",
-        "btn-delete": "🗑️ Elimina Selezionata",
-        "volume-mixer": "Mixer Volume",
-        "btn-reset": "Reset",
-        "master-vol": "Volume Principale",
-        "inst-default": "Trascina per muovere. Clicca a vuoto per spawnare.",
-        "inst-free": "Modalità Libera: Trascina solo per muovere gli oggetti.",
-        "inst-paused": "Simulazione in PAUSA.",
-        "inst-active": "Simulazione attiva.",
-        "inst-wall":
-            "Modo Muro: Clicca a vuoto per creare un muro. Trascina le frecce per ridimensionarlo, il cerchio blu per ruotarlo. Clicca altrove per confermare. Doppio tap su un muro esistente per modificarlo di nuovo.",
-        "inst-wall-edit":
-            "Trascina le frecce per ridimensionare, il cerchio blu per ruotare, oppure trascina il corpo del muro per spostarlo. Clicca altrove per confermare.",
-        "inst-bar": "Modo Barra Rigida: Clicca sul primo punto e poi sul secondo.",
-        "inst-rope": "Modo Corda: Clicca sul primo punto e poi sul secondo.",
-        "inst-chain": "Modo Catena Rigida: Clicca sul primo punto e poi sul secondo.",
-        "inst-eraser": "Modo Gomma: Clicca un oggetto, una barra o una corda per cancellarla.",
-        "limit-reached": "⚠️ Limite di {max} oggetti raggiunto: cancella qualcosa prima di continuare",
-        "no-scenes": "(nessuna scena salvata)"
-    }
-};
-
-let currentLanguage = "en";
-
-function t(key, replacements = {}) {
-    let text = TRANSLATIONS[currentLanguage][key] || TRANSLATIONS["en"][key] || key;
-    for (const k in replacements) {
-        text = text.replace(`{${k}}`, replacements[k]);
-    }
-    return text;
-}
-
-function updateUILanguage() {
-    document.querySelectorAll("[data-i18n]").forEach((el) => {
-        const key = el.getAttribute("data-i18n");
-        if (key) {
-            el.textContent = t(key);
-        }
-    });
-    updateInstructionText();
-    refreshSceneList();
-}
-
-function updateInstructionText() {
-    const el = document.getElementById("instruction-mode");
-    if (!el) return;
-    if (isPaused) {
-        el.innerText = t("inst-paused");
-        return;
-    }
-    if (editingWallBody) {
-        el.innerText = t("inst-wall-edit");
-        return;
-    }
-    if (currentMode === "none") {
-        el.innerText = t("inst-free");
-    } else if (currentMode === "spawn") {
-        if (currentChoice === "wall") {
-            el.innerText = t("inst-wall");
-        } else {
-            el.innerText = t("inst-default");
-        }
-    } else if (currentMode === "bar") {
-        el.innerText = t("inst-bar");
-    } else if (currentMode === "rope") {
-        el.innerText = t("inst-rope");
-    } else if (currentMode === "chain") {
-        el.innerText = t("inst-chain");
-    } else if (currentMode === "eraser") {
-        el.innerText = t("inst-eraser");
-    }
-}
-
-// Set esteso di timbriche e strumenti virtuali
-const SOUND_TIMBRES = {
-    sine: {
-        name: "🌙 Dolce / Eterea (Seno)",
-        type1: "sine",
-        type2: "sine",
-        sub: true,
-        filterType: "lowpass",
-        cutoffMult: 2.5,
-        resonance: 1.0
-    },
-    square: {
-        name: "👾 Chiptune / Retro 8-bit (Square)",
-        type1: "square",
-        type2: "sawtooth",
-        sub: true,
-        filterType: "lowpass",
-        cutoffMult: 3.5,
-        resonance: 2.5
-    },
-    sawtooth: {
-        name: "🎻 Synth Lead / Corda (Saw)",
-        type1: "sawtooth",
-        type2: "triangle",
-        sub: false,
-        filterType: "lowpass",
-        cutoffMult: 3.0,
-        resonance: 1.5
-    },
-    triangle: {
-        name: "🪈 Flauto / Acustico (Triangle)",
-        type1: "triangle",
-        type2: "sine",
-        sub: false,
-        filterType: "lowpass",
-        cutoffMult: 2.0,
-        resonance: 0.8
-    },
-    organ: {
-        name: "⛪ Organo da Chiesa (Organ)",
-        type1: "sine",
-        type2: "square",
-        sub: true,
-        filterType: "bandpass",
-        cutoffMult: 4.0,
-        resonance: 3.0
-    },
-    brass: {
-        name: "🎺 Sezione Ottoni (Brass)",
-        type1: "sawtooth",
-        type2: "square",
-        sub: false,
-        filterType: "lowpass",
-        cutoffMult: 3.8,
-        resonance: 2.0
-    },
-    pad: {
-        name: "🌌 Atmosfera / Ambient Pad",
-        type1: "sine",
-        type2: "triangle",
-        sub: true,
-        filterType: "lowpass",
-        cutoffMult: 1.5,
-        resonance: 0.5
-    },
-    bell: {
-        name: "🔔 Campana / Cristallo (Bell)",
-        type1: "sine",
-        type2: "sawtooth",
-        sub: false,
-        filterType: "highpass",
-        cutoffMult: 1.2,
-        resonance: 4.0
-    }
-};
-let currentTimbreMode = "sine";
-
-function setTimbreMode(mode) {
-    if (SOUND_TIMBRES[mode]) {
-        currentTimbreMode = mode;
-    }
-}
-
-function populateTimbreSelect() {
-    const sel = document.getElementById("timbre-select");
-    if (!sel) return;
-    sel.innerHTML = "";
-    for (const [key, timbre] of Object.entries(SOUND_TIMBRES)) {
-        const opt = document.createElement("option");
-        opt.value = key;
-        opt.textContent = timbre.name;
-        if (key === currentTimbreMode) opt.selected = true;
-        sel.appendChild(opt);
-    }
-}
-
-const SCALE_PATTERNS = {
-    major: [0, 2, 4, 5, 7, 9, 11],
-    naturalMinor: [0, 2, 3, 5, 7, 8, 10],
-    harmonicMinor: [0, 2, 3, 5, 7, 8, 11],
-    dorian: [0, 2, 3, 5, 7, 9, 10],
-    mixolydian: [0, 2, 4, 5, 7, 9, 10],
-    pentatonicMajor: [0, 2, 4, 7, 9],
-    pentatonicMinor: [0, 3, 5, 7, 10],
-    blues: [0, 3, 5, 6, 7, 10],
-    wholeTone: [0, 2, 4, 6, 8, 10],
-    chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
-};
-
-const SCALE_NAMES = {
-    pentatonicMinor: { it: "Pentatonica Minore", en: "Minor Pentatonic" },
-    pentatonicMajor: { it: "Pentatonica Maggiore", en: "Major Pentatonic" },
-    major: { it: "Maggiore", en: "Major" },
-    naturalMinor: { it: "Minore Naturale", en: "Natural Minor" },
-    harmonicMinor: { it: "Minore Armonica", en: "Harmonic Minor" },
-    dorian: { it: "Dorica", en: "Dorian" },
-    mixolydian: { it: "Misolidia", en: "Mixolydian" },
-    blues: { it: "Blues", en: "Blues" },
-    wholeTone: { it: "Toni Interi", en: "Whole Tone" },
-    chromatic: { it: "Cromatica", en: "Chromatic" }
-};
-
-let currentScaleMode = "pentatonicMinor";
-
-const materialRegisters = {
-    bass: { centerDegree: 0, range: 3 },
-    wood: { centerDegree: 4, range: 3 },
-    mid: { centerDegree: 8, range: 4 },
-    rubber: { centerDegree: 11, range: 3 },
-    high: { centerDegree: 15, range: 4 },
-    neon: { centerDegree: 19, range: 4 },
-    wall: { centerDegree: 2, range: 2 }
-};
-
-let melodicDegree = {};
-for (const key of Object.keys(materialRegisters)) melodicDegree[key] = materialRegisters[key].centerDegree;
-
-function degreeToFrequency(degreeIndex) {
-    const pattern = SCALE_PATTERNS[currentScaleMode];
-    const stepsPerOctave = pattern.length;
-    const octave = Math.floor(degreeIndex / stepsPerOctave);
-    const degreeInOctave = ((degreeIndex % stepsPerOctave) + stepsPerOctave) % stepsPerOctave;
-    const semitone = pattern[degreeInOctave] + octave * 12;
-    return baseRoot * Math.pow(2, semitone / 12);
-}
-
-function nextNoteFrequency(type) {
-    const reg = materialRegisters[type] || materialRegisters.wall;
-    let degree = melodicDegree[type] !== undefined ? melodicDegree[type] : reg.centerDegree;
-
-    const pull = (reg.centerDegree - degree) * 0.15;
-    const step = Math.round((Math.random() - 0.5) * 4 + pull);
-    degree = Math.max(reg.centerDegree - reg.range, Math.min(reg.centerDegree + reg.range, degree + step));
-
-    melodicDegree[type] = degree;
-    return degreeToFrequency(degree);
-}
-
-function setScaleMode(mode) {
-    if (!SCALE_PATTERNS[mode]) return;
-    currentScaleMode = mode;
-    for (const key of Object.keys(materialRegisters)) melodicDegree[key] = materialRegisters[key].centerDegree;
-}
-
-function changeScale(mode) {
-    setScaleMode(mode);
-}
-
-function populateScaleSelect() {
-    const sel = document.getElementById("scale-select");
-    if (!sel) return;
-    sel.innerHTML = "";
-    for (const [key, names] of Object.entries(SCALE_NAMES)) {
-        const opt = document.createElement("option");
-        opt.value = key;
-        opt.textContent = names[currentLanguage] || names.en;
-        if (key === currentScaleMode) opt.selected = true;
-        sel.appendChild(opt);
-    }
-}
-
-function setLanguage(lang) {
-    if (TRANSLATIONS[lang]) {
-        currentLanguage = lang;
-        populateScaleSelect();
-        populateTimbreSelect();
-        updateUILanguage();
-    }
-}
-
-const volumes = { bass: 0.8, wood: 0.8, mid: 0.8, rubber: 0.8, high: 0.8, neon: 0.8, wall: 0.8 };
-let masterVolume = 0.8;
-
-function updateVolume(type, val) {
-    volumes[type] = parseFloat(val);
-}
-function updateMasterVolume(val) {
-    masterVolume = parseFloat(val);
-}
-function resetMixer() {
-    masterVolume = 0.8;
-    document.getElementById("vol-master").value = 0.8;
-    for (const key of Object.keys(volumes)) {
-        volumes[key] = 0.8;
-        const slider = document.getElementById("vol-" + key);
-        if (slider) slider.value = 0.8;
-    }
-}
-
-let activeSoundsCount = 0;
-const MAX_SIMULTANEOUS_SOUNDS = 12;
-
-function playMixedSound(typeA, typeB, velocity) {
-    if (audioCtx.state === "suspended") audioCtx.resume();
-    if (activeSoundsCount >= MAX_SIMULTANEOUS_SOUNDS) return;
-    activeSoundsCount++;
-
-    const now = audioCtx.currentTime;
-    const primaryType = typeA;
-    const secondaryType = typeB && typeB !== typeA ? typeB : null;
-    const timbre = SOUND_TIMBRES[currentTimbreMode] || SOUND_TIMBRES.sine;
-
-    const freq1 = nextNoteFrequency(primaryType);
-
-    const osc1 = audioCtx.createOscillator();
-    const oscSub = audioCtx.createOscillator();
-    const gain1 = audioCtx.createGain();
-    const filter1 = audioCtx.createBiquadFilter();
-
-    osc1.type = timbre.type1;
-    osc1.frequency.setValueAtTime(freq1, now);
-
-    oscSub.type = "sine";
-    oscSub.frequency.setValueAtTime(freq1 * 0.5, now);
-
-    filter1.type = timbre.filterType || "lowpass";
-    filter1.frequency.setValueAtTime(Math.min(freq1 * timbre.cutoffMult, 5000), now);
-    filter1.Q.setValueAtTime(timbre.resonance, now);
-
-    const baseVol1 = volumes[primaryType] !== undefined ? volumes[primaryType] : 0.8;
-    const vol1 = Math.min(0.25, velocity * 0.03) * baseVol1 * masterVolume;
-
-    const duration = currentTimbreMode === "pad" ? 3.5 : currentTimbreMode === "bell" ? 3.0 : 2.5;
-
-    gain1.gain.setValueAtTime(0, now);
-    gain1.gain.linearRampToValueAtTime(vol1, now + (currentTimbreMode === "pad" ? 0.4 : 0.1));
-    gain1.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-
-    osc1.connect(filter1);
-    if (timbre.sub) {
-        oscSub.connect(filter1);
-        oscSub.start(now);
-        oscSub.stop(now + duration + 0.1);
-    }
-
-    filter1.connect(gain1);
-    gain1.connect(audioCtx.destination);
-
-    osc1.start(now);
-    osc1.stop(now + duration + 0.1);
-    osc1.onended = () => {
-        activeSoundsCount = Math.max(0, activeSoundsCount - 1);
-    };
-
-    if (secondaryType) {
-        const freq2 = nextNoteFrequency(secondaryType);
-        const osc2 = audioCtx.createOscillator();
-        const gain2 = audioCtx.createGain();
-        const filter2 = audioCtx.createBiquadFilter();
-
-        osc2.type = timbre.type2;
-        osc2.frequency.setValueAtTime(freq2 / (currentTimbreMode === "organ" ? 1 : 2), now);
-        filter2.type = "lowpass";
-        filter2.frequency.setValueAtTime(2800, now);
-
-        const vol2 = vol1 * 0.4;
-
-        gain2.gain.setValueAtTime(0, now);
-        gain2.gain.linearRampToValueAtTime(vol2, now + 0.08);
-        gain2.gain.exponentialRampToValueAtTime(0.0001, now + (duration - 0.3));
-
-        osc2.connect(filter2);
-        filter2.connect(gain2);
-        gain2.connect(audioCtx.destination);
-
-        osc2.start(now);
-        osc2.stop(now + duration);
-    }
-
-    addScore(vol1);
-}
-
-let totalHarmony = 0;
-const scoreEl = document.getElementById("score");
-function addScore(points) {
-    totalHarmony += Math.round(points * 2000);
-    if (scoreEl) scoreEl.innerText = totalHarmony;
-}
-function clearScore() {
-    totalHarmony = 0;
-    if (scoreEl) scoreEl.innerText = "0";
-}
-
-let currentChoice = "bass";
-let currentMode = "spawn";
-let linkStartBody = null;
-let linkStartPoint = null;
-let isPaused = false;
-let ropeIdCounter = 0;
-let editingWallBody = null;
-let resizingWallHandle = null;
-let isDraggingWall = false;
-let wallDragOffset = planck.Vec2(0, 0);
-let lastTapTime = 0;
-let lastTapBody = null;
-const DOUBLE_TAP_MS = 350;
-
-function toggleToolbox(event) {
-    if (event) event.stopPropagation();
-    document.getElementById("toolbox").classList.toggle("collapsed");
-}
-
-function updateRopeProps() {
-    const segVal = document.getElementById("slider-rope-seg").value;
-    document.getElementById("val-rope-seg").innerText = segVal;
-
-    for (let j = world.getJointList(); j; j = j.getNext()) {
-        if (j.isRopeDistanceJoint && typeof j.setFrequency === "function") {
-            j.setFrequency(18.0);
-        }
-    }
-}
-
-function toggleTheme() {
-    document.body.classList.toggle("light-theme");
-}
-
-function togglePause() {
-    isPaused = !isPaused;
-    const btn = document.getElementById("btn-pause-play");
-    if (isPaused) {
-        btn.innerText = t("btn-play");
-    } else {
-        btn.innerText = t("btn-pause");
-    }
-    updateInstructionText();
-}
-
-function updateCursor() {
-    const cursors = {
-        none: "grab",
-        spawn: "copy",
-        bar: "crosshair",
-        rope: "crosshair",
-        chain: "crosshair",
-        eraser: "cell"
-    };
-    canvas.style.cursor = cursors[currentMode] || "default";
-}
-
-function selectBlock(type) {
-    editingWallBody = null;
-    resizingWallHandle = null;
-    isDraggingWall = false;
-    if (currentMode === "spawn" && currentChoice === type) {
-        currentMode = "none";
-        document.querySelectorAll(".block-btn").forEach((btn) => btn.classList.remove("active"));
-    } else {
-        currentMode = "spawn";
-        currentChoice = type;
-        linkStartBody = null;
-        linkStartPoint = null;
-        document.querySelectorAll(".block-btn").forEach((btn) => btn.classList.remove("active"));
-        document.querySelectorAll(".special-btn").forEach((btn) => btn.classList.remove("active"));
-        document.getElementById("btn-" + type).classList.add("active");
-    }
-    updateCursor();
-    updateInstructionText();
-}
-
-function setMode(mode) {
-    editingWallBody = null;
-    resizingWallHandle = null;
-    isDraggingWall = false;
-    if (currentMode === mode) {
-        currentMode = "none";
-        linkStartBody = null;
-        linkStartPoint = null;
-        document.querySelectorAll(".special-btn").forEach((btn) => btn.classList.remove("active"));
-    } else {
-        currentMode = mode;
-        linkStartBody = null;
-        linkStartPoint = null;
-        document.querySelectorAll(".block-btn").forEach((btn) => btn.classList.remove("active"));
-        document.querySelectorAll(".special-btn").forEach((btn) => btn.classList.remove("active"));
-        document.getElementById("btn-" + mode).classList.add("active");
-    }
-    updateCursor();
-    updateInstructionText();
-}
 
 const world = planck.World({ gravity: planck.Vec2(0, 9.8) });
 const canvas = document.getElementById("game-canvas");
@@ -721,6 +167,7 @@ function updatePhysics() {
     }
 }
 
+
 function resetPhysics() {
     document.getElementById("slider-gravity").value = 9.8;
     document.getElementById("slider-drag").value = 0.02;
@@ -788,6 +235,7 @@ canvas.addEventListener("pointerdown", (event) => {
             return;
         }
 
+        // Clic fuori dal muro in fase di editing: chiude l'editing e interrompe l'esecuzione del click corrente
         editingWallBody = null;
         updateInstructionText();
         return;
@@ -846,6 +294,7 @@ canvas.addEventListener("pointerdown", (event) => {
             flashLimitWarning();
             return;
         }
+        saveUndoState();
         const newBody = spawnElement(mousePos.x, mousePos.y, currentChoice);
         if (currentChoice === "wall") {
             editingWallBody = newBody;
@@ -869,6 +318,7 @@ canvas.addEventListener("pointerdown", (event) => {
                 }
             }
         }
+        if (clickedJoint || clickedBody) saveUndoState();
         if (clickedJoint) {
             if (clickedJoint.ropeId !== undefined) {
                 const rId = clickedJoint.ropeId;
@@ -936,8 +386,11 @@ canvas.addEventListener("pointerdown", (event) => {
                     linkStartPoint = null;
                     return;
                 }
+
+                saveUndoState();
                 const posA = linkStartBody.getWorldPoint(linkStartPoint);
                 const posB = clickedBody.getWorldPoint(localPoint);
+
                 if (currentMode === "bar") {
                     const joint = world.createJoint(
                         planck.DistanceJoint({
@@ -963,7 +416,9 @@ canvas.addEventListener("pointerdown", (event) => {
                     const dirY = (posB.y - posA.y) / totalDist;
                     const chainAngle = Math.atan2(dirY, dirX);
                     const linkHalfHeight = 2.5 / SCALE;
+
                     let prevBody = linkStartBody;
+
                     for (let i = 0; i < numSegments; i++) {
                         const startX = posA.x + dirX * segmentLength * i;
                         const startY = posA.y + dirY * segmentLength * i;
@@ -971,6 +426,7 @@ canvas.addEventListener("pointerdown", (event) => {
                         const endY = posA.y + dirY * segmentLength * (i + 1);
                         const cx = (startX + endX) / 2;
                         const cy = (startY + endY) / 2;
+
                         const segBody = world.createDynamicBody({
                             position: planck.Vec2(cx, cy),
                             angle: chainAngle
@@ -985,14 +441,17 @@ canvas.addEventListener("pointerdown", (event) => {
                         segBody.setAngularDamping(0.3);
                         segBody.ropeId = currentRopeId;
                         segBody.renderColor = "#ffa502";
+
                         const pivot = planck.Vec2(startX, startY);
                         const joint = world.createJoint(planck.RevoluteJoint({}, prevBody, segBody, pivot));
                         joint.ropeId = currentRopeId;
                         joint.isCustomRender = true;
                         joint.renderColor = "#c47a00";
                         joint.renderWidth = 2;
+
                         prevBody = segBody;
                     }
+
                     const finalJoint = world.createJoint(planck.RevoluteJoint({}, prevBody, clickedBody, posB));
                     finalJoint.ropeId = currentRopeId;
                     finalJoint.isCustomRender = true;
@@ -1006,13 +465,12 @@ canvas.addEventListener("pointerdown", (event) => {
                     const segmentLength = totalDist / numSegments;
                     let prevBody = linkStartBody;
                     let prevAnchor = linkStartPoint;
+
                     for (let i = 1; i < numSegments; i++) {
                         const percent = i / numSegments;
                         const x = posA.x + (posB.x - posA.x) * percent;
                         const y = posA.y + (posB.y - posA.y) * percent;
-                        const segBody = world.createDynamicBody({
-                            position: planck.Vec2(x, y)
-                        });
+                        const segBody = world.createDynamicBody({ position: planck.Vec2(x, y) });
                         segBody.createFixture(planck.Circle(2.5 / SCALE), {
                             density: 0.2,
                             friction: 0.2,
@@ -1021,6 +479,7 @@ canvas.addEventListener("pointerdown", (event) => {
                         });
                         segBody.setLinearDamping(0.25);
                         segBody.ropeId = currentRopeId;
+
                         const joint = world.createJoint(
                             planck.DistanceJoint({
                                 bodyA: prevBody,
@@ -1036,6 +495,7 @@ canvas.addEventListener("pointerdown", (event) => {
                         joint.isCustomRender = true;
                         joint.renderColor = "#ff4757";
                         joint.renderWidth = 2;
+
                         prevBody = segBody;
                         prevAnchor = planck.Vec2(0, 0);
                     }
@@ -1071,34 +531,120 @@ function distToSegment(p, p1, p2) {
     return Math.hypot(p.x - (p1.x + t * (p2.x - p1.x)), p.y - (p1.y + t * (p2.y - p1.y)));
 }
 
-updateBodyCountDisplay();
-let _rafId = null;
-_rafId = requestAnimationFrame(function loop() {
-    gameLoop();
-});
+const MIN_WALL_HALF = 10 / SCALE;
+const MAX_WALL_HALF = 600 / SCALE;
+const WALL_HANDLE_OFFSET = 18 / SCALE;
 
-window.addEventListener("beforeunload", () => {
-    cancelAnimationFrame(_rafId);
-    if (audioCtx.state !== "closed") audioCtx.close();
-});
-
-resizeCanvas();
-migrateOldSingleSave();
-refreshSceneList();
-populateScaleSelect();
-populateTimbreSelect();
-updateUILanguage();
-
-const timbreSelectEl = document.getElementById("timbre-select");
-if (timbreSelectEl) {
-    timbreSelectEl.addEventListener("change", (e) => {
-        setTimbreMode(e.target.value);
-    });
+function getWallHandles(body) {
+    const halfW = body.wallHalfW;
+    const halfH = body.wallHalfH;
+    const local = {
+        right: planck.Vec2(halfW + WALL_HANDLE_OFFSET, 0),
+        left: planck.Vec2(-(halfW + WALL_HANDLE_OFFSET), 0),
+        top: planck.Vec2(0, -(halfH + WALL_HANDLE_OFFSET)),
+        bottom: planck.Vec2(0, halfH + WALL_HANDLE_OFFSET),
+        rotate: planck.Vec2(0, -(halfH + WALL_HANDLE_OFFSET + 24 / SCALE))
+    };
+    const handles = {};
+    for (const side in local) {
+        const worldPt = body.getWorldPoint(local[side]);
+        handles[side] = { x: worldPt.x * SCALE, y: worldPt.y * SCALE };
+    }
+    return handles;
 }
 
-const scaleSelectEl = document.getElementById("scale-select");
-if (scaleSelectEl) {
-    scaleSelectEl.addEventListener("change", (e) => {
-        setScaleMode(e.target.value);
-    });
+function rotateWall(body, mouseWorldPos) {
+    const center = body.getPosition();
+    const dx = mouseWorldPos.x - center.x;
+    const dy = mouseWorldPos.y - center.y;
+    body.setAngle(Math.atan2(dx, -dy));
 }
+
+function resizeWall(body, side, mouseWorldPos) {
+    const localMouse = body.getLocalPoint(mouseWorldPos);
+    let halfW = body.wallHalfW;
+    let halfH = body.wallHalfH;
+    let localCenterOffset = planck.Vec2(0, 0);
+
+    if (side === "right") {
+        const newHalfW = Math.min(MAX_WALL_HALF, Math.max(MIN_WALL_HALF, (localMouse.x + halfW) / 2));
+        localCenterOffset = planck.Vec2(newHalfW - halfW, 0);
+        halfW = newHalfW;
+    } else if (side === "left") {
+        const newHalfW = Math.min(MAX_WALL_HALF, Math.max(MIN_WALL_HALF, (halfW - localMouse.x) / 2));
+        localCenterOffset = planck.Vec2(halfW - newHalfW, 0);
+        halfW = newHalfW;
+    } else if (side === "bottom") {
+        const newHalfH = Math.min(MAX_WALL_HALF, Math.max(MIN_WALL_HALF, (localMouse.y + halfH) / 2));
+        localCenterOffset = planck.Vec2(0, newHalfH - halfH);
+        halfH = newHalfH;
+    } else if (side === "top") {
+        const newHalfH = Math.min(MAX_WALL_HALF, Math.max(MIN_WALL_HALF, (halfH - localMouse.y) / 2));
+        localCenterOffset = planck.Vec2(0, halfH - newHalfH);
+        halfH = newHalfH;
+    }
+
+    const newCenterWorld = body.getWorldPoint(localCenterOffset);
+    body.setPosition(newCenterWorld);
+
+    let f = body.getFixtureList();
+    while (f) {
+        const nextF = f.getNext();
+        body.destroyFixture(f);
+        f = nextF;
+    }
+    body.createFixture(planck.Box(halfW, halfH), {
+        density: blockConfigs.wall.density,
+        restitution: blockConfigs.wall.restitution,
+        friction: 0.2
+    });
+    body.wallHalfW = halfW;
+    body.wallHalfH = halfH;
+}
+
+canvas.addEventListener("pointermove", (event) => {
+    const mousePos = planck.Vec2(event.clientX / SCALE, event.clientY / SCALE);
+    if (mouseJoint) mouseJoint.setTarget(mousePos);
+
+    if (isDraggingWall && editingWallBody) {
+        editingWallBody.setPosition(planck.Vec2(mousePos.x + wallDragOffset.x, mousePos.y + wallDragOffset.y));
+        editingWallBody.setLinearVelocity(planck.Vec2(0, 0));
+        editingWallBody.setAngularVelocity(0);
+        return;
+    }
+
+    if (resizingWallHandle && editingWallBody) {
+        if (resizingWallHandle.side === "rotate") {
+            rotateWall(editingWallBody, mousePos);
+        } else {
+            resizeWall(editingWallBody, resizingWallHandle.side, mousePos);
+        }
+    }
+});
+
+window.addEventListener("pointerup", () => {
+    if (mouseJoint) {
+        world.destroyJoint(mouseJoint);
+        mouseJoint = null;
+    }
+    resizingWallHandle = null;
+    isDraggingWall = false;
+});
+
+canvas.addEventListener(
+    "wheel",
+    (event) => {
+        if (!editingWallBody) return;
+        event.preventDefault();
+        const rotationStep = 0.05;
+        const delta = event.deltaY > 0 ? rotationStep : -rotationStep;
+        editingWallBody.setAngle(editingWallBody.getAngle() + delta);
+    },
+    { passive: false }
+);
+
+
+let timeStep = 1 / 60;
+let velIterations = 20;
+let posIterations = 60;
+const PHYSICS_SUBSTEPS = 4;
