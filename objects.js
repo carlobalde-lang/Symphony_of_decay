@@ -126,6 +126,14 @@ const blockConfigs = {
     rubber: { name: "rubber", sides: 7, size: 28, color: "#ffa502", density: 0.35, restitution: 0.75 },
     high: { name: "high", sides: 8, size: 26, color: "#2ed573", density: 0.25, restitution: 0.85 },
     neon: { name: "neon", isCircle: true, radius: 24, color: "#ff00ff", density: 0.15, restitution: 0.95 },
+    // Sfere-nota: ognuna suona sempre la propria nota fissa (Do-Si), vedi NOTE_FREQUENCIES in audio.js
+    note_do: { name: "note_do", isCircle: true, radius: 20, color: "#ff3b30", density: 0.3, restitution: 0.6 },
+    note_re: { name: "note_re", isCircle: true, radius: 20, color: "#ff9500", density: 0.3, restitution: 0.6 },
+    note_mi: { name: "note_mi", isCircle: true, radius: 20, color: "#ffcc00", density: 0.3, restitution: 0.6 },
+    note_fa: { name: "note_fa", isCircle: true, radius: 20, color: "#34c759", density: 0.3, restitution: 0.6 },
+    note_sol: { name: "note_sol", isCircle: true, radius: 20, color: "#30b0c7", density: 0.3, restitution: 0.6 },
+    note_la: { name: "note_la", isCircle: true, radius: 20, color: "#5e5ce6", density: 0.3, restitution: 0.6 },
+    note_si: { name: "note_si", isCircle: true, radius: 20, color: "#af52de", density: 0.3, restitution: 0.6 },
     wall: {
         name: "wall",
         isRect: true,
@@ -135,8 +143,28 @@ const blockConfigs = {
         density: 0.8,
         restitution: 0.2,
         isStatic: true
+    },
+    // Emettitore: piazzabile e ruotabile come un muro, ma non ridimensionabile.
+    // Spara periodicamente l'oggetto scelto nella direzione in cui è orientato.
+    emitter: {
+        name: null, // l'emettitore non produce suoni interattivi (nessun clink agli urti)
+        isRect: true,
+        w: 70,
+        h: 38,
+        color: "#f1c40f",
+        density: 1.0,
+        restitution: 0.1,
+        isStatic: true,
+        isEmitter: true
     }
 };
+
+// Tipi spawnabili dall'emettitore (esclude muro ed emettitore stesso)
+function getEmitterSpawnableTypes() {
+    return Object.keys(blockConfigs).filter((k) => k !== "wall" && k !== "emitter");
+}
+
+const EMITTER_MIN_INTERVAL_MS = 120; // limite di sicurezza a BPM molto alti
 
 function spawnElement(x, y, typeKey) {
     const cfg = blockConfigs[typeKey];
@@ -160,6 +188,19 @@ function spawnElement(x, y, typeKey) {
         if (typeKey === "wall") {
             body.wallHalfW = cfg.w / 2 / SCALE;
             body.wallHalfH = cfg.h / 2 / SCALE;
+        }
+        if (typeKey === "emitter") {
+            body.isEmitter = true;
+            body.emitterHalfW = cfg.w / 2 / SCALE;
+            body.emitterHalfH = cfg.h / 2 / SCALE;
+            body.emitterObjectType = "bass";
+            body.emitterPower = 12;
+            body.emitterBPM = 90;
+            body.emitterLifetime = 8; // secondi; 0 = infinito
+            body.emitterNextFireMs = Date.now() + 60000 / body.emitterBPM;
+            body.emitterPaused = false;
+            body.emitterSyncEnabled = false;
+            body.emitterSyncDivision = 1;
         }
     } else if (cfg.sides === 4) {
         body.createFixture(planck.Box(cfg.size / SCALE, cfg.size / SCALE), {
@@ -236,8 +277,13 @@ world.on("begin-contact", (contact) => {
         const velA = bodyA.getLinearVelocity();
         const velB = bodyB.getLinearVelocity();
         const relativeVel = Math.hypot(velA.x - velB.x, velA.y - velB.y);
-        if (relativeVel > 0.8) {
-            playMixedSound(bodyA.soundType, bodyB.soundType, relativeVel);
+        if (relativeVel > 0.35) {
+            // Il muro non ha un suono proprio: prende in prestito il timbro dell'oggetto che lo colpisce.
+            let soundA = bodyA.soundType;
+            let soundB = bodyB.soundType;
+            if (soundA === "wall" && soundB !== "wall") soundA = soundB;
+            if (soundB === "wall" && soundA !== "wall") soundB = soundA;
+            playMixedSound(soundA, soundB, relativeVel);
             const posA = bodyA.getPosition();
             const posB = bodyB.getPosition();
             spawnImpactParticles(
@@ -253,6 +299,7 @@ world.on("begin-contact", (contact) => {
 function clearSceneAction() {
     saveUndoState();
     clearScene();
+    updateInstructionText();
 }
 
 function triggerDecay() {
@@ -318,4 +365,300 @@ function flashMessage(text, color) {
         el.style.color = "";
     }, 2200);
 }
+
+// --- Emettitore: sparo periodico ---
+
+
+// --- Clock globale condiviso ---
+// Un emettitore in modalità "sync" spara agganciato a questa griglia temporale
+// comune (fase fissa dall'origine), invece che al proprio BPM libero: così più
+// emettitori sincronizzati restano in fase tra loro come tracce di una canzone.
+let globalClockBpm = 120;
+let globalClockOriginMs = Date.now();
+
+const SYNC_DIVISIONS = [
+    { value: 0.25, label: "1/16" },
+    { value: 0.5, label: "1/8" },
+    { value: 1, label: "1/4" },
+    { value: 2, label: "1/2" },
+    { value: 4, label: "1" },
+    { value: 8, label: "2" }
+];
+
+function setGlobalClockBpm(value) {
+    globalClockBpm = Math.max(20, parseFloat(value) || 120);
+    const valEl = document.getElementById("val-global-clock-bpm");
+    if (valEl) valEl.innerText = Math.round(globalClockBpm);
+    realignAllSyncedEmitters();
+}
+
+function resetGlobalClock() {
+    globalClockOriginMs = Date.now();
+    realignAllSyncedEmitters();
+    flashMessage("🎼 " + t("global-clock-reset"), "#2ed573");
+}
+
+function alignEmitterToGrid(b) {
+    const beatLenMs = 60000 / globalClockBpm;
+    const gridMs = Math.max(EMITTER_MIN_INTERVAL_MS, b.emitterSyncDivision * beatLenMs);
+    const elapsed = Date.now() - globalClockOriginMs;
+    const nextIndex = Math.floor(elapsed / gridMs) + 1;
+    b.emitterNextFireMs = globalClockOriginMs + nextIndex * gridMs;
+}
+
+function realignAllSyncedEmitters() {
+    for (let b = world.getBodyList(); b; b = b.getNext()) {
+        if (b.isEmitter && b.emitterSyncEnabled) alignEmitterToGrid(b);
+    }
+}
+
+function updateEmitters() {
+    const now = Date.now();
+    for (let b = world.getBodyList(); b; b = b.getNext()) {
+        if (!b.isEmitter) continue;
+        if (b.emitterPaused || editingWallBody === b) continue;
+        if (now < b.emitterNextFireMs) continue;
+
+        if (b.emitterSyncEnabled) {
+            const beatLenMs = 60000 / globalClockBpm;
+            const gridMs = Math.max(EMITTER_MIN_INTERVAL_MS, b.emitterSyncDivision * beatLenMs);
+            // Sommata alla griglia (non ricalcolata da "ora"): resta agganciata in fase
+            // con gli altri emettitori sincronizzati, senza drift.
+            while (b.emitterNextFireMs <= now) b.emitterNextFireMs += gridMs;
+        } else {
+            const intervalMs = Math.max(EMITTER_MIN_INTERVAL_MS, 60000 / Math.max(1, b.emitterBPM));
+            // Ricalcolata da "ora" (non sommata) per evitare raffiche di recupero dopo una pausa/lag.
+            b.emitterNextFireMs = now + intervalMs;
+        }
+
+        if (getSpawnedBodyCount() >= MAX_BODIES) continue;
+
+        const spawnType = blockConfigs[b.emitterObjectType] ? b.emitterObjectType : "bass";
+        const cfg = blockConfigs[spawnType];
+        const halfH = b.emitterHalfH;
+        const muzzleOffset = halfH + (cfg.radius || cfg.size || cfg.h / 2 || 20) / SCALE + 4 / SCALE;
+        const spawnPoint = b.getWorldPoint(planck.Vec2(0, -muzzleOffset));
+        const forward = b.getWorldVector(planck.Vec2(0, -1));
+
+        const projectile = spawnElement(spawnPoint.x, spawnPoint.y, spawnType);
+        const power = b.emitterPower || 12;
+        projectile.setLinearVelocity(planck.Vec2(forward.x * power, forward.y * power));
+
+        if (b.emitterLifetime > 0) {
+            projectile.lifespanMs = b.emitterLifetime * 1000;
+            projectile.spawnedAtMs = Date.now();
+        }
+
+        spawnImpactParticles(spawnPoint.x, spawnPoint.y, "#f1c40f", power * 0.4);
+    }
+}
+
+// --- Ciclo di vita degli oggetti con durata limitata (sparati dagli emettitori) ---
+
+function updateLifespans() {
+    const now = Date.now();
+    let b = world.getBodyList();
+    while (b) {
+        const nextB = b.getNext();
+        if (b.lifespanMs && now - b.spawnedAtMs >= b.lifespanMs) {
+            const pos = b.getPosition();
+            spawnImpactParticles(pos.x, pos.y, b.renderColor || "#ffffff", 3);
+
+            if (b === linkStartBody) {
+                linkStartBody = null;
+                linkStartPoint = null;
+            }
+            if (b === lastTapBody) lastTapBody = null;
+            if (mouseJoint && (mouseJoint.getBodyA() === b || mouseJoint.getBodyB() === b)) {
+                world.destroyJoint(mouseJoint);
+                mouseJoint = null;
+            }
+            world.destroyBody(b);
+        }
+        b = nextB;
+    }
+}
+
+let currentEmitterPanelBody = null;
+
+function populateEmitterObjectSelect() {
+    const sel = document.getElementById("emitter-object-select");
+    if (!sel) return;
+    sel.innerHTML = "";
+    getEmitterSpawnableTypes().forEach((key) => {
+        const opt = document.createElement("option");
+        opt.value = key;
+        opt.textContent = t("obj-" + key);
+        sel.appendChild(opt);
+    });
+}
+
+function populateSyncDivisionSelect() {
+    const sel = document.getElementById("emitter-sync-division-select");
+    if (!sel) return;
+    sel.innerHTML = "";
+    SYNC_DIVISIONS.forEach((d) => {
+        const opt = document.createElement("option");
+        opt.value = d.value;
+        opt.textContent = d.label;
+        sel.appendChild(opt);
+    });
+}
+
+function updateSyncControlsEnabled(target) {
+    const bpmSlider = document.getElementById("slider-emitter-bpm");
+    const divSelect = document.getElementById("emitter-sync-division-select");
+    const bpmRow = document.getElementById("emitter-bpm-row");
+    const syncRow = document.getElementById("emitter-sync-division-row");
+    if (bpmSlider) bpmSlider.disabled = !!target.emitterSyncEnabled;
+    if (divSelect) divSelect.disabled = !target.emitterSyncEnabled;
+    if (bpmRow) bpmRow.style.opacity = target.emitterSyncEnabled ? 0.4 : 1;
+    if (syncRow) syncRow.style.opacity = target.emitterSyncEnabled ? 1 : 0.4;
+}
+
+// --- Posizionamento dinamico del pannello emettitore ---
+// Il pannello segue l'emettitore selezionato, scegliendo il primo lato libero
+// (destra, sinistra, sotto, sopra) che non esce dallo schermo e non copre
+// il toolbox principale o il box informazioni in alto a sinistra.
+
+function rectsOverlap(a, b) {
+    return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+
+function positionEmitterPanel(target) {
+    const panel = document.getElementById("emitter-panel");
+    if (!panel || !target) return;
+
+    const margin = 12;
+    const gap = 150;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    const pos = target.getPosition();
+    const ex = pos.x * SCALE;
+    const ey = pos.y * SCALE;
+
+    const panelW = panel.offsetWidth || 260;
+    const panelH = panel.offsetHeight || 300;
+
+    // Zone da evitare: toolbox principale (se visibile) e box info in alto a sinistra
+    const forbidden = [];
+    const toolboxEl = document.getElementById("toolbox");
+    if (toolboxEl && !toolboxEl.classList.contains("collapsed")) {
+        forbidden.push(toolboxEl.getBoundingClientRect());
+    }
+    const uiEl = document.getElementById("ui");
+    if (uiEl) forbidden.push(uiEl.getBoundingClientRect());
+
+    function clampRect(r) {
+        let left = Math.min(Math.max(r.left, margin), vw - panelW - margin);
+        let top = Math.min(Math.max(r.top, margin), vh - panelH - margin);
+        return { left, top, right: left + panelW, bottom: top + panelH };
+    }
+
+    const candidates = [
+        { left: ex + gap, top: ey - panelH / 2 }, // destra
+        { left: ex - gap - panelW, top: ey - panelH / 2 }, // sinistra
+        { left: ex - panelW / 2, top: ey + gap }, // sotto
+        { left: ex - panelW / 2, top: ey - gap - panelH } // sopra
+    ].map((c) => clampRect({ left: c.left, top: c.top, right: c.left + panelW, bottom: c.top + panelH }));
+
+    let chosen = candidates.find((c) => !forbidden.some((f) => rectsOverlap(c, f)));
+    if (!chosen) chosen = candidates[2]; // fallback: sotto, comunque clampato a schermo
+
+    panel.style.left = chosen.left + "px";
+    panel.style.top = chosen.top + "px";
+}
+
+function updateEmitterPanelPosition() {
+    if (currentEmitterPanelBody) positionEmitterPanel(currentEmitterPanelBody);
+}
+
+function syncEmitterPanel() {
+    const panel = document.getElementById("emitter-panel");
+    if (!panel) return;
+
+    const target = editingWallBody && editingWallBody.isEmitter ? editingWallBody : null;
+
+    if (target !== currentEmitterPanelBody) {
+        currentEmitterPanelBody = target;
+        if (target) {
+            populateEmitterObjectSelect();
+            document.getElementById("emitter-object-select").value = target.emitterObjectType;
+            document.getElementById("slider-emitter-power").value = target.emitterPower;
+            document.getElementById("val-emitter-power").innerText = target.emitterPower;
+            document.getElementById("slider-emitter-bpm").value = target.emitterBPM;
+            document.getElementById("val-emitter-bpm").innerText = Math.round(target.emitterBPM);
+            document.getElementById("slider-emitter-lifetime").value = target.emitterLifetime;
+            document.getElementById("val-emitter-lifetime").innerText =
+                target.emitterLifetime > 0 ? target.emitterLifetime : t("emitter-lifetime-infinite");
+            populateSyncDivisionSelect();
+            document.getElementById("chk-emitter-sync").checked = !!target.emitterSyncEnabled;
+            document.getElementById("emitter-sync-division-select").value = target.emitterSyncDivision;
+            document.getElementById("slider-global-clock-bpm").value = globalClockBpm;
+            document.getElementById("val-global-clock-bpm").innerText = Math.round(globalClockBpm);
+            updateSyncControlsEnabled(target);
+            updateEmitterPauseButtonLabel();
+            panel.style.visibility = "hidden";
+            panel.style.display = "flex";
+            positionEmitterPanel(target);
+            panel.style.visibility = "visible";
+        } else {
+            panel.style.display = "none";
+        }
+    }
+}
+
+function setEmitterSyncEnabled(enabled) {
+    if (!currentEmitterPanelBody) return;
+    currentEmitterPanelBody.emitterSyncEnabled = enabled;
+    if (enabled) alignEmitterToGrid(currentEmitterPanelBody);
+    updateSyncControlsEnabled(currentEmitterPanelBody);
+}
+
+function setEmitterSyncDivision(value) {
+    if (!currentEmitterPanelBody) return;
+    currentEmitterPanelBody.emitterSyncDivision = parseFloat(value);
+    if (currentEmitterPanelBody.emitterSyncEnabled) alignEmitterToGrid(currentEmitterPanelBody);
+}
+
+function setEmitterObjectType(value) {
+    if (currentEmitterPanelBody) currentEmitterPanelBody.emitterObjectType = value;
+}
+
+function setEmitterPower(value) {
+    const val = parseFloat(value);
+    document.getElementById("val-emitter-power").innerText = val;
+    if (currentEmitterPanelBody) currentEmitterPanelBody.emitterPower = val;
+}
+
+function setEmitterBpm(value) {
+    const val = parseFloat(value);
+    document.getElementById("val-emitter-bpm").innerText = Math.round(val);
+    if (currentEmitterPanelBody) currentEmitterPanelBody.emitterBPM = val;
+}
+
+function setEmitterLifetime(value) {
+    const val = parseFloat(value);
+    document.getElementById("val-emitter-lifetime").innerText = val > 0 ? val : t("emitter-lifetime-infinite");
+    if (currentEmitterPanelBody) currentEmitterPanelBody.emitterLifetime = val;
+}
+
+function updateEmitterPauseButtonLabel() {
+    const btn = document.getElementById("btn-emitter-pause");
+    if (!btn || !currentEmitterPanelBody) return;
+    btn.innerText = currentEmitterPanelBody.emitterPaused ? t("emitter-resume") : t("emitter-pause");
+}
+
+function toggleEmitterPaused() {
+    if (!currentEmitterPanelBody) return;
+    currentEmitterPanelBody.emitterPaused = !currentEmitterPanelBody.emitterPaused;
+    updateEmitterPauseButtonLabel();
+}
+
+function closeEmitterPanel() {
+    editingWallBody = null;
+    updateInstructionText();
+}
+
 

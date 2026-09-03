@@ -11,7 +11,18 @@ const baseRoot = 110.0; // A2, radice comune di tutte le scale
 // --- Bus master + effetti globali (riverbero / delay) ---
 const masterBus = audioCtx.createGain();
 masterBus.gain.value = 1.0;
-masterBus.connect(audioCtx.destination);
+
+// Limiter/compressore finale: evita che la somma di molti suoni assieme
+// saturi l'uscita (clipping) generando glitch e "buchi" di volume percepiti.
+const masterCompressor = audioCtx.createDynamicsCompressor();
+masterCompressor.threshold.value = -12; // dB, sopra questo livello inizia a comprimere
+masterCompressor.knee.value = 24; // transizione morbida
+masterCompressor.ratio.value = 12; // compressione forte tipo limiter
+masterCompressor.attack.value = 0.003; // reagisce in fretta ai picchi
+masterCompressor.release.value = 0.25; // recupero morbido
+
+masterBus.connect(masterCompressor);
+masterCompressor.connect(audioCtx.destination);
 
 function _generateImpulseResponse(durationSec, decay) {
     const rate = audioCtx.sampleRate;
@@ -236,7 +247,22 @@ function degreeToFrequency(degreeIndex) {
     return baseRoot * Math.pow(2, semitone / 12);
 }
 
+// Frequenze fisse (temperamento equabile, ottava centrale) per le sfere-nota
+// Do-Re-Mi-Fa-Sol-La-Si: ogni sfera suona sempre la propria nota, indipendentemente
+// da scala musicale corrente e dal "drift" melodico usato per gli altri oggetti.
+const NOTE_FREQUENCIES = {
+    note_do: 261.626, // C4
+    note_re: 293.665, // D4
+    note_mi: 329.628, // E4
+    note_fa: 349.228, // F4
+    note_sol: 391.995, // G4
+    note_la: 440.0, // A4
+    note_si: 493.883 // B4
+};
+
 function nextNoteFrequency(type) {
+    if (NOTE_FREQUENCIES[type] !== undefined) return NOTE_FREQUENCIES[type];
+
     const reg = materialRegisters[type] || materialRegisters.wall;
     let degree = melodicDegree[type] !== undefined ? melodicDegree[type] : reg.centerDegree;
 
@@ -297,12 +323,40 @@ function resetMixer() {
 }
 
 let activeSoundsCount = 0;
-const MAX_SIMULTANEOUS_SOUNDS = 24;
+
+// --- Voice stealing ---
+// Non c'è un limite a QUANTI suoni possono partire, ma per non sovraccaricare
+// il motore audio (troppi oscillatori assieme = glitch e silenzio) si tiene un
+// tetto sul numero di voci REALMENTE in corso. Quando si supera, la voce più
+// vecchia viene interrotta con una dissolvenza rapida (non un taglio secco)
+// per fare spazio a quella nuova, che parte sempre regolarmente.
+const MAX_ACTIVE_VOICES = 40;
+const STEAL_FADE_SEC = 0.02;
+let activeVoices = [];
+
+function stealOldestVoiceIfNeeded() {
+    while (activeVoices.length >= MAX_ACTIVE_VOICES) {
+        const voice = activeVoices.shift();
+        const stealNow = audioCtx.currentTime;
+        try {
+            voice.gains.forEach((g) => {
+                g.gain.cancelScheduledValues(stealNow);
+                g.gain.setValueAtTime(g.gain.value, stealNow);
+                g.gain.linearRampToValueAtTime(0.0001, stealNow + STEAL_FADE_SEC);
+            });
+            voice.oscillators.forEach((o) => {
+                try {
+                    o.stop(stealNow + STEAL_FADE_SEC + 0.005);
+                } catch (e) {}
+            });
+        } catch (e) {}
+    }
+}
 
 function playMixedSound(typeA, typeB, velocity) {
     if (audioCtx.state === "suspended") audioCtx.resume();
-    if (activeSoundsCount >= MAX_SIMULTANEOUS_SOUNDS) return;
     activeSoundsCount++;
+    stealOldestVoiceIfNeeded();
 
     const now = getScheduledTime(audioCtx.currentTime);
     const primaryType = typeA;
@@ -327,7 +381,7 @@ function playMixedSound(typeA, typeB, velocity) {
     filter1.Q.setValueAtTime(timbre.resonance, now);
 
     const baseVol1 = volumes[primaryType] !== undefined ? volumes[primaryType] : 0.8;
-    const vol1 = Math.min(0.25, velocity * 0.03) * baseVol1 * masterVolume;
+    const vol1 = Math.max(0.04, Math.min(0.25, velocity * 0.03)) * baseVol1 * masterVolume;
 
     const duration = currentTimbreMode === "pad" ? 3.5 : currentTimbreMode === "bell" ? 3.0 : 2.5;
 
@@ -347,8 +401,17 @@ function playMixedSound(typeA, typeB, velocity) {
 
     osc1.start(now);
     osc1.stop(now + duration + 0.1);
+
+    const voiceEntry = {
+        oscillators: timbre.sub ? [osc1, oscSub] : [osc1],
+        gains: [gain1]
+    };
+    activeVoices.push(voiceEntry);
+
     osc1.onended = () => {
         activeSoundsCount = Math.max(0, activeSoundsCount - 1);
+        const idx = activeVoices.indexOf(voiceEntry);
+        if (idx !== -1) activeVoices.splice(idx, 1);
     };
 
     if (secondaryType) {
@@ -374,6 +437,9 @@ function playMixedSound(typeA, typeB, velocity) {
 
         osc2.start(now);
         osc2.stop(now + duration);
+
+        voiceEntry.oscillators.push(osc2);
+        voiceEntry.gains.push(gain2);
     }
 
     addScore(vol1);

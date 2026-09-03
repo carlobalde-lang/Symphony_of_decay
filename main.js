@@ -8,6 +8,8 @@ function setTrailEnabled(enabled) {
 }
 
 function gameLoop() {
+    updatePerformanceAdaptiveLimit(performance.now());
+
     if (!isPaused) {
         if (windSpeed !== 0 || windTurbulence > 0) {
             const time = Date.now() * 0.003;
@@ -23,6 +25,8 @@ function gameLoop() {
         for (let s = 0; s < PHYSICS_SUBSTEPS; s++) {
             world.step(timeStep / PHYSICS_SUBSTEPS, velIterations, posIterations);
         }
+        updateEmitters();
+        updateLifespans();
     }
 
     drawJapaneseBackground();
@@ -70,6 +74,49 @@ function gameLoop() {
             }
         }
         ctx.restore();
+
+        if (b.isEmitter) {
+            const tip = b.getWorldPoint(planck.Vec2(0, -(b.emitterHalfH + 16 / SCALE)));
+            const baseL = b.getWorldPoint(planck.Vec2(-8 / SCALE, -(b.emitterHalfH - 2 / SCALE)));
+            const baseR = b.getWorldPoint(planck.Vec2(8 / SCALE, -(b.emitterHalfH - 2 / SCALE)));
+            ctx.save();
+            ctx.globalAlpha = b.emitterPaused ? 0.3 : 1.0;
+            ctx.fillStyle = "#ff0055";
+            ctx.beginPath();
+            ctx.moveTo(tip.x * SCALE, tip.y * SCALE);
+            ctx.lineTo(baseL.x * SCALE, baseL.y * SCALE);
+            ctx.lineTo(baseR.x * SCALE, baseR.y * SCALE);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+
+            // Pulsante pausa/play cliccabile, sempre visibile sull'angolo dell'emettitore
+            const badgeLocal = planck.Vec2(-b.emitterHalfW + EMITTER_BADGE_LOCAL_OFFSET, -b.emitterHalfH + EMITTER_BADGE_LOCAL_OFFSET);
+            const badgeWorld = b.getWorldPoint(badgeLocal);
+            const bx = badgeWorld.x * SCALE;
+            const by = badgeWorld.y * SCALE;
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(bx, by, EMITTER_BADGE_RADIUS, 0, Math.PI * 2);
+            ctx.fillStyle = b.emitterPaused ? "#2ed573" : "#1a1a2e";
+            ctx.fill();
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 1.2;
+            ctx.stroke();
+            ctx.fillStyle = "#ffffff";
+            if (b.emitterPaused) {
+                ctx.beginPath();
+                ctx.moveTo(bx - 3, by - 4);
+                ctx.lineTo(bx - 3, by + 4);
+                ctx.lineTo(bx + 4, by);
+                ctx.closePath();
+                ctx.fill();
+            } else {
+                ctx.fillRect(bx - 3.5, by - 4, 2.4, 8);
+                ctx.fillRect(bx + 1.1, by - 4, 2.4, 8);
+            }
+            ctx.restore();
+        }
     }
 
     updateAndDrawImpactParticles();
@@ -107,32 +154,46 @@ function gameLoop() {
     if (editingWallBody) {
         const bodyAngle = editingWallBody.getAngle();
         const handles = getWallHandles(editingWallBody);
-        const arrows = [
-            { ...handles.right, angle: bodyAngle },
-            { ...handles.left, angle: bodyAngle + Math.PI },
-            { ...handles.top, angle: bodyAngle - Math.PI / 2 },
-            { ...handles.bottom, angle: bodyAngle + Math.PI / 2 }
-        ];
+
+        if (!editingWallBody.isEmitter) {
+            const arrows = [
+                { ...handles.right, angle: bodyAngle },
+                { ...handles.left, angle: bodyAngle + Math.PI },
+                { ...handles.top, angle: bodyAngle - Math.PI / 2 },
+                { ...handles.bottom, angle: bodyAngle + Math.PI / 2 }
+            ];
+            ctx.save();
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 1.5;
+            arrows.forEach((a) => {
+                ctx.save();
+                ctx.translate(a.x, a.y);
+                ctx.rotate(a.angle);
+                ctx.fillStyle = "#ff0055";
+                ctx.beginPath();
+                ctx.moveTo(8, 0);
+                ctx.lineTo(-6, -7);
+                ctx.lineTo(-6, 7);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+                ctx.restore();
+            });
+            ctx.restore();
+        }
+
+        const topHandlePoint = editingWallBody.isEmitter
+            ? editingWallBody.getWorldPoint(planck.Vec2(0, -editingWallBody.emitterHalfH))
+            : null;
+        const topPoint = editingWallBody.isEmitter
+            ? { x: topHandlePoint.x * SCALE, y: topHandlePoint.y * SCALE }
+            : handles.top;
+
         ctx.save();
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 1.5;
-        arrows.forEach((a) => {
-            ctx.save();
-            ctx.translate(a.x, a.y);
-            ctx.rotate(a.angle);
-            ctx.fillStyle = "#ff0055";
-            ctx.beginPath();
-            ctx.moveTo(8, 0);
-            ctx.lineTo(-6, -7);
-            ctx.lineTo(-6, 7);
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
-            ctx.restore();
-        });
-
         ctx.beginPath();
-        ctx.moveTo(handles.top.x, handles.top.y);
+        ctx.moveTo(topPoint.x, topPoint.y);
         ctx.lineTo(handles.rotate.x, handles.rotate.y);
         ctx.strokeStyle = "rgba(255,255,255,0.6)";
         ctx.stroke();
@@ -146,6 +207,7 @@ function gameLoop() {
     }
 
     updateBodyCountDisplay();
+    updateEmitterPanelPosition();
     _rafId = requestAnimationFrame(gameLoop);
 }
 

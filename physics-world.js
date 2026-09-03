@@ -2,6 +2,10 @@
 
 const SCALE = 40.0;
 
+// Pulsante pausa/play disegnato sull'angolo dell'emettitore
+const EMITTER_BADGE_LOCAL_OFFSET = 11 / SCALE;
+const EMITTER_BADGE_RADIUS = 10; // px, in coordinate schermo
+
 const CAT_ROPE = 0x0002;
 const CAT_ROPE_MASK = 0xffff & ~0x0002; // non-colla con le corde
 
@@ -51,7 +55,61 @@ ceiling.isWall = true;
 let logicalWidth = window.innerWidth;
 let logicalHeight = window.innerHeight;
 
-const MAX_BODIES = 150;
+const DEFAULT_MAX_BODIES = 150;
+let MAX_BODIES = DEFAULT_MAX_BODIES;
+
+// --- Limite oggetti adattivo in base alle prestazioni ---
+const DYNAMIC_LIMIT_MIN = 30;
+const DYNAMIC_LIMIT_MAX = 400;
+const DYNAMIC_LIMIT_STEP = 10;
+const LOW_FPS_THRESHOLD = 42; // sotto questo, il limite scende
+const HIGH_FPS_THRESHOLD = 56; // sopra questo (e vicini al limite), il limite sale
+let dynamicLimitEnabled = true;
+let _perfLastFrameMs = null;
+let _perfAccumMs = 0;
+let _perfFrameCount = 0;
+
+function updateMaxBodyDisplay() {
+    const el = document.getElementById("body-count-max");
+    if (el) el.innerText = MAX_BODIES;
+}
+
+function setDynamicLimitEnabled(enabled) {
+    dynamicLimitEnabled = enabled;
+    if (!enabled) {
+        MAX_BODIES = DEFAULT_MAX_BODIES;
+        updateMaxBodyDisplay();
+    }
+    _perfAccumMs = 0;
+    _perfFrameCount = 0;
+}
+
+// Da chiamare una volta per frame (anche in pausa, il costo di rendering conta comunque).
+function updatePerformanceAdaptiveLimit(nowMs) {
+    if (_perfLastFrameMs === null) {
+        _perfLastFrameMs = nowMs;
+        return;
+    }
+    const dt = nowMs - _perfLastFrameMs;
+    _perfLastFrameMs = nowMs;
+    if (!dynamicLimitEnabled || dt <= 0) return;
+
+    _perfAccumMs += dt;
+    _perfFrameCount++;
+    if (_perfAccumMs < 1000) return; // valuta circa una volta al secondo
+
+    const avgFps = 1000 / (_perfAccumMs / _perfFrameCount);
+    _perfAccumMs = 0;
+    _perfFrameCount = 0;
+
+    if (avgFps < LOW_FPS_THRESHOLD && MAX_BODIES > DYNAMIC_LIMIT_MIN) {
+        MAX_BODIES = Math.max(DYNAMIC_LIMIT_MIN, MAX_BODIES - DYNAMIC_LIMIT_STEP);
+        updateMaxBodyDisplay();
+    } else if (avgFps > HIGH_FPS_THRESHOLD && MAX_BODIES < DYNAMIC_LIMIT_MAX) {
+        MAX_BODIES = Math.min(DYNAMIC_LIMIT_MAX, MAX_BODIES + DYNAMIC_LIMIT_STEP);
+        updateMaxBodyDisplay();
+    }
+}
 
 function getSpawnedBodyCount() {
     let count = 0;
@@ -190,6 +248,22 @@ canvas.addEventListener("pointerdown", (event) => {
     if (!toolbox.classList.contains("collapsed") && clientX > window.innerWidth - 320 && clientY < window.innerHeight)
         return;
 
+    // Click sul pulsante pausa/play disegnato sull'angolo dell'emettitore: toggla e basta,
+    // non seleziona/apre il pannello.
+    for (let eb = world.getBodyList(); eb; eb = eb.getNext()) {
+        if (!eb.isEmitter) continue;
+        const badgeWorld = eb.getWorldPoint(
+            planck.Vec2(-eb.emitterHalfW + EMITTER_BADGE_LOCAL_OFFSET, -eb.emitterHalfH + EMITTER_BADGE_LOCAL_OFFSET)
+        );
+        const bx = badgeWorld.x * SCALE;
+        const by = badgeWorld.y * SCALE;
+        if (Math.hypot(clientX - bx, clientY - by) < EMITTER_BADGE_RADIUS + 4) {
+            eb.emitterPaused = !eb.emitterPaused;
+            if (currentEmitterPanelBody === eb) updateEmitterPauseButtonLabel();
+            return;
+        }
+    }
+
     const mousePos = planck.Vec2(clientX / SCALE, clientY / SCALE);
     let clickedBody = null;
     for (let b = world.getBodyList(); b; b = b.getNext()) {
@@ -258,6 +332,22 @@ canvas.addEventListener("pointerdown", (event) => {
         return;
     }
 
+    const isEmitterSelectClick =
+        clickedBody &&
+        clickedBody.isEmitter &&
+        currentMode !== "eraser" &&
+        currentMode !== "bar" &&
+        currentMode !== "rope" &&
+        currentMode !== "chain";
+
+    if (isEmitterSelectClick) {
+        editingWallBody = clickedBody;
+        resizingWallHandle = null;
+        isDraggingWall = false;
+        updateInstructionText();
+        return;
+    }
+
     if (currentMode === "none") {
         if (clickedBody && !clickedBody.isWall) {
             mouseJoint = world.createJoint(
@@ -296,7 +386,7 @@ canvas.addEventListener("pointerdown", (event) => {
         }
         saveUndoState();
         const newBody = spawnElement(mousePos.x, mousePos.y, currentChoice);
-        if (currentChoice === "wall") {
+        if (currentChoice === "wall" || currentChoice === "emitter") {
             editingWallBody = newBody;
             updateInstructionText();
         }
@@ -363,6 +453,7 @@ canvas.addEventListener("pointerdown", (event) => {
                     editingWallBody = null;
                     resizingWallHandle = null;
                     isDraggingWall = false;
+                    updateInstructionText();
                 }
                 world.destroyBody(clickedBody);
             }
@@ -536,8 +627,16 @@ const MAX_WALL_HALF = 600 / SCALE;
 const WALL_HANDLE_OFFSET = 18 / SCALE;
 
 function getWallHandles(body) {
-    const halfW = body.wallHalfW;
-    const halfH = body.wallHalfH;
+    const halfW = body.isEmitter ? body.emitterHalfW : body.wallHalfW;
+    const halfH = body.isEmitter ? body.emitterHalfH : body.wallHalfH;
+
+    if (body.isEmitter) {
+        // L'emettitore si può solo ruotare (e trascinare), non ridimensionare.
+        const localRotate = planck.Vec2(0, -(halfH + WALL_HANDLE_OFFSET + 24 / SCALE));
+        const worldPt = body.getWorldPoint(localRotate);
+        return { rotate: { x: worldPt.x * SCALE, y: worldPt.y * SCALE } };
+    }
+
     const local = {
         right: planck.Vec2(halfW + WALL_HANDLE_OFFSET, 0),
         left: planck.Vec2(-(halfW + WALL_HANDLE_OFFSET), 0),

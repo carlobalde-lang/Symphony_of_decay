@@ -41,6 +41,17 @@ function serializeScene() {
             ropeId: b.ropeId || null,
             wallHalfW: b.wallHalfW || null,
             wallHalfH: b.wallHalfH || null,
+            isEmitter: b.isEmitter || false,
+            emitterHalfW: b.emitterHalfW || null,
+            emitterHalfH: b.emitterHalfH || null,
+            emitterObjectType: b.emitterObjectType || null,
+            emitterPower: b.emitterPower || null,
+            emitterBPM: b.emitterBPM || null,
+            emitterLifetime: b.emitterLifetime !== undefined ? b.emitterLifetime : null,
+            emitterPaused: b.emitterPaused || false,
+            emitterSyncEnabled: b.emitterSyncEnabled || false,
+            emitterSyncDivision: b.emitterSyncDivision || null,
+            remainingLifespanMs: b.lifespanMs ? Math.max(0, b.spawnedAtMs + b.lifespanMs - Date.now()) : null,
             linearDamping: b.getLinearDamping(),
             fixtures
         });
@@ -83,6 +94,7 @@ function serializeScene() {
             wind: document.getElementById("slider-wind").value,
             turbulence: document.getElementById("slider-turbulence").value
         },
+        globalClockBpm,
         bodies,
         joints
     };
@@ -93,6 +105,15 @@ function deserializeScene(data) {
 
     if (!data || data.version !== 1 || !Array.isArray(data.bodies) || !Array.isArray(data.joints)) {
         throw new Error("Formato scena incompatibile");
+    }
+
+    if (data.globalClockBpm) {
+        globalClockBpm = data.globalClockBpm;
+        globalClockOriginMs = Date.now();
+        const bpmEl = document.getElementById("slider-global-clock-bpm");
+        const valEl = document.getElementById("val-global-clock-bpm");
+        if (bpmEl) bpmEl.value = globalClockBpm;
+        if (valEl) valEl.innerText = Math.round(globalClockBpm);
     }
 
     const bodies = data.bodies.map((bd) => {
@@ -121,6 +142,25 @@ function deserializeScene(data) {
         if (bd.wallHalfW) {
             body.wallHalfW = bd.wallHalfW;
             body.wallHalfH = bd.wallHalfH;
+        }
+        if (bd.isEmitter) {
+            body.isEmitter = true;
+            body.emitterHalfW = bd.emitterHalfW;
+            body.emitterHalfH = bd.emitterHalfH;
+            body.emitterObjectType = bd.emitterObjectType || "bass";
+            body.emitterPower = bd.emitterPower || 12;
+            body.emitterBPM = bd.emitterBPM || 90;
+            body.emitterLifetime = bd.emitterLifetime !== null && bd.emitterLifetime !== undefined ? bd.emitterLifetime : 8;
+            body.emitterPaused = bd.emitterPaused || false;
+            body.emitterSyncEnabled = bd.emitterSyncEnabled || false;
+            body.emitterSyncDivision = bd.emitterSyncDivision || 1;
+            // Ricalcolato da "ora": il timestamp precedente non ha più senso dopo un caricamento/undo.
+            body.emitterNextFireMs = Date.now() + 60000 / body.emitterBPM;
+            if (body.emitterSyncEnabled) alignEmitterToGrid(body);
+        }
+        if (bd.remainingLifespanMs !== null && bd.remainingLifespanMs !== undefined) {
+            body.lifespanMs = bd.remainingLifespanMs;
+            body.spawnedAtMs = Date.now();
         }
         return body;
     });
@@ -186,6 +226,7 @@ function undoAction() {
     const prevState = undoStack.pop();
     deserializeScene(prevState);
     updateUndoRedoButtons();
+    updateInstructionText();
     flashMessage("↩️ Undo", "#70a1ff");
 }
 
@@ -196,6 +237,7 @@ function redoAction() {
     const nextState = redoStack.pop();
     deserializeScene(nextState);
     updateUndoRedoButtons();
+    updateInstructionText();
     flashMessage("↪️ Redo", "#70a1ff");
 }
 
@@ -300,6 +342,7 @@ function loadScene() {
     try {
         saveUndoState();
         deserializeScene(data);
+        updateInstructionText();
         flashMessage(`📂 "${name}" loaded (${data.bodies.length} objects)`, "#2ed573");
     } catch (e) {
         flashMessage("⚠️ Load failed: incompatible save", "#ff4757");

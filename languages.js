@@ -53,7 +53,38 @@ const TRANSLATIONS = {
         "inst-chain": "Rigid Chain Mode: Click first point, then second point.",
         "inst-eraser": "Eraser Mode: Click an object, bar, or rope to delete it.",
         "limit-reached": "⚠️ Limit of {max} objects reached: delete something before continuing",
-        "no-scenes": "(no saved scenes)"
+        "no-scenes": "(no saved scenes)",
+        "block-emitter": "🎯 Emitter",
+        "inst-emitter": "Emitter Mode: Click empty space to place an emitter. Drag the arrow to rotate it, drag the body to move it. Click elsewhere to confirm.",
+        "inst-emitter-edit": "Drag the blue circle to rotate the emitter, or drag its body to move it. Use the panel to set what it fires. Click elsewhere to confirm.",
+        "emitter-panel-title": "🎯 Emitter Settings",
+        "emitter-object-label": "Fires:",
+        "emitter-power-label": "Launch Power",
+        "emitter-bpm-label": "Fire Rate (BPM)",
+        "emitter-panel-close": "✕ Close",
+        "obj-bass": "Orolite",
+        "obj-wood": "Pentacore",
+        "obj-mid": "Hexarun",
+        "obj-rubber": "Septifor",
+        "obj-high": "Octavox",
+        "obj-neon": "Astral",
+        "obj-note_do": "🔴 Note Do (C)",
+        "obj-note_re": "🟠 Note Re (D)",
+        "obj-note_mi": "🟡 Note Mi (E)",
+        "obj-note_fa": "🟢 Note Fa (F)",
+        "obj-note_sol": "🔵 Note Sol (G)",
+        "obj-note_la": "🟣 Note La (A)",
+        "obj-note_si": "🟪 Note Si (B)",
+        "dynamic-limit-label": "⚙️ Adaptive Limit",
+        "emitter-lifetime-label": "Lifetime (s)",
+        "emitter-lifetime-infinite": "∞",
+        "emitter-pause": "⏸️ Pause Emitter",
+        "emitter-resume": "▶️ Resume Emitter",
+        "emitter-sync-label": "🎼 Sync to Global Clock",
+        "emitter-sync-division-label": "Note Division",
+        "global-clock-bpm-label": "Global Clock BPM",
+        "global-clock-reset-btn": "↺ Reset Clock Phase",
+        "global-clock-reset": "Clock phase reset"
     },
     it: {
         harmony: "Armonia",
@@ -107,7 +138,38 @@ const TRANSLATIONS = {
         "inst-chain": "Modo Catena Rigida: Clicca sul primo punto e poi sul secondo.",
         "inst-eraser": "Modo Gomma: Clicca un oggetto, una barra o una corda per cancellarla.",
         "limit-reached": "⚠️ Limite di {max} oggetti raggiunto: cancella qualcosa prima di continuare",
-        "no-scenes": "(nessuna scena salvata)"
+        "no-scenes": "(nessuna scena salvata)",
+        "block-emitter": "🎯 Emettitore",
+        "inst-emitter": "Modo Emettitore: Clicca a vuoto per piazzare un emettitore. Trascina la freccia per ruotarlo, trascina il corpo per spostarlo. Clicca altrove per confermare.",
+        "inst-emitter-edit": "Trascina il cerchio blu per ruotare l'emettitore, oppure trascina il suo corpo per spostarlo. Usa il pannello per impostare cosa spara. Clicca altrove per confermare.",
+        "emitter-panel-title": "🎯 Impostazioni Emettitore",
+        "emitter-object-label": "Spara:",
+        "emitter-power-label": "Potenza di Lancio",
+        "emitter-bpm-label": "Frequenza di Lancio (BPM)",
+        "emitter-panel-close": "✕ Chiudi",
+        "obj-bass": "Orolite",
+        "obj-wood": "Pentacore",
+        "obj-mid": "Hexarun",
+        "obj-rubber": "Septifor",
+        "obj-high": "Octavox",
+        "obj-neon": "Astral",
+        "obj-note_do": "🔴 Nota Do (C)",
+        "obj-note_re": "🟠 Nota Re (D)",
+        "obj-note_mi": "🟡 Nota Mi (E)",
+        "obj-note_fa": "🟢 Nota Fa (F)",
+        "obj-note_sol": "🔵 Nota Sol (G)",
+        "obj-note_la": "🟣 Nota La (A)",
+        "obj-note_si": "🟪 Nota Si (B)",
+        "dynamic-limit-label": "⚙️ Limite Adattivo",
+        "emitter-lifetime-label": "Durata (s)",
+        "emitter-lifetime-infinite": "∞",
+        "emitter-pause": "⏸️ Pausa Emettitore",
+        "emitter-resume": "▶️ Riprendi Emettitore",
+        "emitter-sync-label": "🎼 Sincronizza al Clock Globale",
+        "emitter-sync-division-label": "Divisione Ritmica",
+        "global-clock-bpm-label": "BPM Clock Globale",
+        "global-clock-reset-btn": "↺ Reset Fase Clock",
+        "global-clock-reset": "Fase del clock azzerata"
     }
 };
 
@@ -134,13 +196,14 @@ function updateUILanguage() {
 
 function updateInstructionText() {
     const el = document.getElementById("instruction-mode");
+    syncEmitterPanel();
     if (!el) return;
     if (isPaused) {
         el.innerText = t("inst-paused");
         return;
     }
     if (editingWallBody) {
-        el.innerText = t("inst-wall-edit");
+        el.innerText = editingWallBody.isEmitter ? t("inst-emitter-edit") : t("inst-wall-edit");
         return;
     }
     if (currentMode === "none") {
@@ -148,6 +211,8 @@ function updateInstructionText() {
     } else if (currentMode === "spawn") {
         if (currentChoice === "wall") {
             el.innerText = t("inst-wall");
+        } else if (currentChoice === "emitter") {
+            el.innerText = t("inst-emitter");
         } else {
             el.innerText = t("inst-default");
         }
@@ -167,6 +232,11 @@ function setLanguage(lang) {
         currentLanguage = lang;
         populateScaleSelect();
         populateTimbreSelect();
+        if (currentEmitterPanelBody) {
+            const savedValue = currentEmitterPanelBody.emitterObjectType;
+            populateEmitterObjectSelect();
+            document.getElementById("emitter-object-select").value = savedValue;
+        }
         updateUILanguage();
     }
 }
