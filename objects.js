@@ -201,6 +201,8 @@ function spawnElement(x, y, typeKey) {
             body.emitterPaused = false;
             body.emitterSyncEnabled = false;
             body.emitterSyncDivision = 1;
+            body.emitterPattern = [];
+            body.emitterPatternIndex = 0;
         }
     } else if (cfg.sides === 4) {
         body.createFixture(planck.Box(cfg.size / SCALE, cfg.size / SCALE), {
@@ -433,7 +435,14 @@ function updateEmitters() {
 
         if (getSpawnedBodyCount() >= MAX_BODIES) continue;
 
-        const spawnType = blockConfigs[b.emitterObjectType] ? b.emitterObjectType : "bass";
+        let spawnType;
+        if (b.emitterPattern && b.emitterPattern.length > 0) {
+            spawnType = b.emitterPattern[b.emitterPatternIndex % b.emitterPattern.length];
+            if (!blockConfigs[spawnType]) spawnType = "bass";
+            b.emitterPatternIndex = (b.emitterPatternIndex + 1) % b.emitterPattern.length;
+        } else {
+            spawnType = blockConfigs[b.emitterObjectType] ? b.emitterObjectType : "bass";
+        }
         const cfg = blockConfigs[spawnType];
         const halfH = b.emitterHalfH;
         const muzzleOffset = halfH + (cfg.radius || cfg.size || cfg.h / 2 || 20) / SCALE + 4 / SCALE;
@@ -491,6 +500,76 @@ function populateEmitterObjectSelect() {
         opt.textContent = t("obj-" + key);
         sel.appendChild(opt);
     });
+}
+
+function populatePatternAddSelect() {
+    const sel = document.getElementById("emitter-pattern-add-select");
+    if (!sel) return;
+    const prevValue = sel.value;
+    sel.innerHTML = "";
+    getEmitterSpawnableTypes().forEach((key) => {
+        const opt = document.createElement("option");
+        opt.value = key;
+        opt.textContent = t("obj-" + key);
+        sel.appendChild(opt);
+    });
+    if (prevValue && getEmitterSpawnableTypes().includes(prevValue)) sel.value = prevValue;
+}
+
+function renderEmitterPattern() {
+    const container = document.getElementById("emitter-pattern-steps");
+    const objectSelect = document.getElementById("emitter-object-select");
+    if (!container || !currentEmitterPanelBody) return;
+
+    const pattern = currentEmitterPanelBody.emitterPattern || [];
+    container.innerHTML = "";
+
+    if (pattern.length === 0) {
+        const empty = document.createElement("span");
+        empty.className = "pattern-empty-hint";
+        empty.textContent = t("emitter-pattern-empty");
+        container.appendChild(empty);
+    } else {
+        pattern.forEach((typeKey, i) => {
+            const chip = document.createElement("span");
+            chip.className = "pattern-step-chip";
+            const label = document.createElement("span");
+            label.textContent = t("obj-" + typeKey).replace(/^[^\s]+\s/, ""); // toglie l'emoji per compattezza
+            const del = document.createElement("button");
+            del.textContent = "✕";
+            del.onclick = () => removePatternStep(i);
+            chip.appendChild(label);
+            chip.appendChild(del);
+            container.appendChild(chip);
+        });
+    }
+
+    if (objectSelect) objectSelect.disabled = pattern.length > 0;
+}
+
+function addPatternStep() {
+    if (!currentEmitterPanelBody) return;
+    const sel = document.getElementById("emitter-pattern-add-select");
+    if (!sel || !sel.value) return;
+    if (!currentEmitterPanelBody.emitterPattern) currentEmitterPanelBody.emitterPattern = [];
+    currentEmitterPanelBody.emitterPattern.push(sel.value);
+    renderEmitterPattern();
+}
+
+function removePatternStep(index) {
+    if (!currentEmitterPanelBody || !currentEmitterPanelBody.emitterPattern) return;
+    currentEmitterPanelBody.emitterPattern.splice(index, 1);
+    if (currentEmitterPanelBody.emitterPatternIndex >= currentEmitterPanelBody.emitterPattern.length) {
+        currentEmitterPanelBody.emitterPatternIndex = 0;
+    }
+    renderEmitterPattern();
+}
+
+function clearEmitterPattern() {
+    if (!currentEmitterPanelBody) return;
+    currentEmitterPanelBody.emitterPattern = [];
+    currentEmitterPanelBody.emitterPatternIndex = 0;
+    renderEmitterPattern();
 }
 
 function populateSyncDivisionSelect() {
@@ -597,6 +676,9 @@ function syncEmitterPanel() {
             document.getElementById("emitter-sync-division-select").value = target.emitterSyncDivision;
             document.getElementById("slider-global-clock-bpm").value = globalClockBpm;
             document.getElementById("val-global-clock-bpm").innerText = Math.round(globalClockBpm);
+            if (!target.emitterPattern) target.emitterPattern = [];
+            populatePatternAddSelect();
+            renderEmitterPattern();
             updateSyncControlsEnabled(target);
             updateEmitterPauseButtonLabel();
             panel.style.visibility = "hidden";

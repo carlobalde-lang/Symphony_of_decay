@@ -259,6 +259,49 @@
                 font-size: 13px;
                 margin-bottom: 4px;
             }
+            .pattern-steps {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+                min-height: 22px;
+            }
+            .pattern-empty-hint {
+                font-size: 10px;
+                opacity: 0.6;
+                font-style: italic;
+                text-transform: none;
+            }
+            .pattern-step-chip {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                background: var(--sub-btn-bg);
+                border: 1px solid var(--border-color);
+                border-radius: 12px;
+                padding: 3px 6px 3px 10px;
+                font-size: 10px;
+                font-weight: 600;
+            }
+            .pattern-step-chip button {
+                background: none;
+                border: none;
+                color: #ff4757;
+                cursor: pointer;
+                font-size: 10px;
+                padding: 0 2px;
+                font-family: inherit;
+            }
+            .pattern-add-row {
+                display: flex;
+                gap: 6px;
+                align-items: center;
+            }
+            .pattern-add-row select {
+                flex: 1;
+            }
+            .pattern-add-row button {
+                white-space: nowrap;
+            }
             .special-tools {
                 display: grid;
                 grid-template-columns: repeat(2, 1fr);

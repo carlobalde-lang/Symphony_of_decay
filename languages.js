@@ -84,7 +84,11 @@ const TRANSLATIONS = {
         "emitter-sync-division-label": "Note Division",
         "global-clock-bpm-label": "Global Clock BPM",
         "global-clock-reset-btn": "↺ Reset Clock Phase",
-        "global-clock-reset": "Clock phase reset"
+        "global-clock-reset": "Clock phase reset",
+        "emitter-pattern-label": "🎵 Melodic Pattern",
+        "emitter-pattern-add-btn": "+ Add",
+        "emitter-pattern-clear-btn": "🗑️ Clear Pattern",
+        "emitter-pattern-empty": "(empty — uses \"Fires\" above)"
     },
     it: {
         harmony: "Armonia",
@@ -169,7 +173,11 @@ const TRANSLATIONS = {
         "emitter-sync-division-label": "Divisione Ritmica",
         "global-clock-bpm-label": "BPM Clock Globale",
         "global-clock-reset-btn": "↺ Reset Fase Clock",
-        "global-clock-reset": "Fase del clock azzerata"
+        "global-clock-reset": "Fase del clock azzerata",
+        "emitter-pattern-label": "🎵 Pattern Melodico",
+        "emitter-pattern-add-btn": "+ Aggiungi",
+        "emitter-pattern-clear-btn": "🗑️ Cancella Pattern",
+        "emitter-pattern-empty": "(vuoto — usa \"Spara\" sopra)"
     }
 };
 
@@ -236,6 +244,8 @@ function setLanguage(lang) {
             const savedValue = currentEmitterPanelBody.emitterObjectType;
             populateEmitterObjectSelect();
             document.getElementById("emitter-object-select").value = savedValue;
+            populatePatternAddSelect();
+            renderEmitterPattern();
         }
         updateUILanguage();
     }

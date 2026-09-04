@@ -395,6 +395,15 @@
                 <select id="emitter-object-select" class="scene-select" onchange="setEmitterObjectType(this.value)"></select>
             </div>
             <div class="tool-group">
+                <label data-i18n="emitter-pattern-label">🎵 Melodic Pattern</label>
+                <div id="emitter-pattern-steps" class="pattern-steps"></div>
+                <div class="pattern-add-row">
+                    <select id="emitter-pattern-add-select" class="scene-select" style="margin-bottom: 0"></select>
+                    <button class="sub-btn" onclick="addPatternStep()" data-i18n="emitter-pattern-add-btn">+ Add</button>
+                </div>
+                <button class="sub-btn" onclick="clearEmitterPattern()" data-i18n="emitter-pattern-clear-btn">🗑️ Clear Pattern</button>
+            </div>
+            <div class="tool-group">
                 <label
                     ><span data-i18n="emitter-power-label">Launch Power</span>:
                     <span id="val-emitter-power" class="slider-val">12</span></label

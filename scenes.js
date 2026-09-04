@@ -51,6 +51,8 @@ function serializeScene() {
             emitterPaused: b.emitterPaused || false,
             emitterSyncEnabled: b.emitterSyncEnabled || false,
             emitterSyncDivision: b.emitterSyncDivision || null,
+            emitterPattern: b.emitterPattern && b.emitterPattern.length > 0 ? b.emitterPattern : null,
+            emitterPatternIndex: b.emitterPatternIndex || 0,
             remainingLifespanMs: b.lifespanMs ? Math.max(0, b.spawnedAtMs + b.lifespanMs - Date.now()) : null,
             linearDamping: b.getLinearDamping(),
             fixtures
@@ -154,6 +156,8 @@ function deserializeScene(data) {
             body.emitterPaused = bd.emitterPaused || false;
             body.emitterSyncEnabled = bd.emitterSyncEnabled || false;
             body.emitterSyncDivision = bd.emitterSyncDivision || 1;
+            body.emitterPattern = Array.isArray(bd.emitterPattern) ? bd.emitterPattern.slice() : [];
+            body.emitterPatternIndex = bd.emitterPatternIndex || 0;
             // Ricalcolato da "ora": il timestamp precedente non ha più senso dopo un caricamento/undo.
             body.emitterNextFireMs = Date.now() + 60000 / body.emitterBPM;
             if (body.emitterSyncEnabled) alignEmitterToGrid(body);
