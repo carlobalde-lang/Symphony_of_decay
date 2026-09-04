@@ -230,6 +230,79 @@
             .block-btn#btn-note_si {
                 border-left: 3px solid #af52de;
             }
+            #top-center-controls {
+                position: absolute;
+                top: 10px;
+                left: 50%;
+                transform: translateX(-50%);
+                display: flex;
+                gap: 8px;
+                background: var(--ui-bg);
+                padding: 6px 8px;
+                border-radius: 10px;
+                border: 1px solid var(--border-color);
+                backdrop-filter: blur(8px);
+                z-index: 20;
+            }
+            #top-center-controls .sub-btn:disabled {
+                opacity: 0.4;
+                cursor: default;
+            }
+            .accordion {
+                border: 1px solid var(--border-color);
+                border-radius: 8px;
+                overflow: hidden;
+                background: rgba(128, 128, 128, 0.06);
+            }
+            .accordion + .accordion {
+                margin-top: 0;
+            }
+            .accordion summary {
+                cursor: pointer;
+                padding: 9px 10px;
+                font-size: 11px;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 0.3px;
+                color: var(--text-color);
+                list-style: none;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                user-select: none;
+            }
+            .accordion summary::-webkit-details-marker {
+                display: none;
+            }
+            .accordion summary::after {
+                content: "▸";
+                font-size: 10px;
+                opacity: 0.7;
+                transition: transform 0.15s ease;
+            }
+            .accordion[open] > summary::after {
+                transform: rotate(90deg);
+            }
+            .accordion summary:hover {
+                background: rgba(255, 0, 85, 0.08);
+            }
+            .accordion .accordion-body {
+                padding: 10px;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                border-top: 1px solid var(--border-color);
+            }
+            .accordion.sub-accordion {
+                background: rgba(128, 128, 128, 0.1);
+            }
+            .accordion.sub-accordion summary {
+                padding: 7px 8px;
+                font-size: 10px;
+            }
+            .accordion.sub-accordion .accordion-body {
+                padding: 8px;
+            }
             #emitter-panel {
                 position: absolute;
                 top: 0;
@@ -417,7 +490,6 @@
                 color: #fff;
                 border-color: #ff0055;
                 box-shadow: 0 0 10px rgba(255, 0, 85, 0.4);
-                grid-column: span 2;
             }
             button.primary:hover {
                 background: #ff3366;

@@ -112,12 +112,6 @@ function createFractalTree(worldX, groundY, scale, seedVal) {
     return tree;
 }
 
-function updateTreesCount() {
-    const countInput = parseInt(document.getElementById("input-trees-count").value) || 12;
-    document.getElementById("val-trees-count").innerText = countInput;
-    initCustomBackgroundTrees(countInput);
-}
-
 function initCustomBackgroundTrees(count) {
     backgroundTrees = [];
     const w = window.innerWidth;
@@ -132,8 +126,7 @@ function initCustomBackgroundTrees(count) {
 }
 
 function initBackgroundTrees() {
-    const countInput = parseInt(document.getElementById("input-trees-count")?.value) || 12;
-    initCustomBackgroundTrees(countInput);
+    initCustomBackgroundTrees(30);
 }
 initBackgroundTrees();
 

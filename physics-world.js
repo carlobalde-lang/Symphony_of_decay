@@ -2,6 +2,9 @@
 
 const SCALE = 40.0;
 
+// Numero di segmenti per corde/catene, fissato (ex slider rimosso dall'UI)
+const ROPE_CHAIN_SEGMENTS = 10;
+
 // Pulsante pausa/play disegnato sull'angolo dell'emettitore
 const EMITTER_BADGE_LOCAL_OFFSET = 11 / SCALE;
 const EMITTER_BADGE_RADIUS = 10; // px, in coordinate schermo
@@ -243,6 +246,11 @@ canvas.addEventListener("pointerdown", (event) => {
 
     if (clientX < 280 && clientY < 200) return;
     if (clientX > window.innerWidth - 300 && clientY < 60) return;
+    const topCenterEl = document.getElementById("top-center-controls");
+    if (topCenterEl) {
+        const r = topCenterEl.getBoundingClientRect();
+        if (clientX >= r.left - 6 && clientX <= r.right + 6 && clientY >= r.top - 6 && clientY <= r.bottom + 6) return;
+    }
 
     const toolbox = document.getElementById("toolbox");
     if (!toolbox.classList.contains("collapsed") && clientX > window.innerWidth - 320 && clientY < window.innerHeight)
@@ -500,7 +508,7 @@ canvas.addEventListener("pointerdown", (event) => {
                 } else if (currentMode === "chain") {
                     ropeIdCounter++;
                     const currentRopeId = ropeIdCounter;
-                    const numSegments = parseInt(document.getElementById("slider-rope-seg").value);
+                    const numSegments = ROPE_CHAIN_SEGMENTS;
                     const totalDist = planck.Vec2.distance(posA, posB);
                     const segmentLength = totalDist / numSegments;
                     const dirX = (posB.x - posA.x) / totalDist;
@@ -551,7 +559,7 @@ canvas.addEventListener("pointerdown", (event) => {
                 } else {
                     ropeIdCounter++;
                     const currentRopeId = ropeIdCounter;
-                    const numSegments = parseInt(document.getElementById("slider-rope-seg").value);
+                    const numSegments = ROPE_CHAIN_SEGMENTS;
                     const totalDist = planck.Vec2.distance(posA, posB);
                     const segmentLength = totalDist / numSegments;
                     let prevBody = linkStartBody;

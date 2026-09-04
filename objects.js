@@ -30,17 +30,6 @@ function toggleToolbox(event) {
     document.getElementById("toolbox").classList.toggle("collapsed");
 }
 
-function updateRopeProps() {
-    const segVal = document.getElementById("slider-rope-seg").value;
-    document.getElementById("val-rope-seg").innerText = segVal;
-
-    for (let j = world.getJointList(); j; j = j.getNext()) {
-        if (j.isRopeDistanceJoint && typeof j.setFrequency === "function") {
-            j.setFrequency(18.0);
-        }
-    }
-}
-
 function toggleTheme() {
     document.body.classList.toggle("light-theme");
 }
@@ -285,7 +274,17 @@ world.on("begin-contact", (contact) => {
             let soundB = bodyB.soundType;
             if (soundA === "wall" && soundB !== "wall") soundA = soundB;
             if (soundB === "wall" && soundA !== "wall") soundB = soundA;
-            playMixedSound(soundA, soundB, relativeVel);
+
+            // Intensità dell'impatto: combina velocità relativa e massa effettiva della coppia,
+            // così un urto pesante e lento suona comunque più "forte" di uno leggero e veloce.
+            const massA = bodyA.getMass();
+            const massB = bodyB.getMass();
+            let effectiveMass;
+            if (massA > 0 && massB > 0) effectiveMass = (massA * massB) / (massA + massB);
+            else effectiveMass = massA > 0 ? massA : massB > 0 ? massB : 1;
+            const impactIntensity = relativeVel * Math.sqrt(effectiveMass);
+
+            playMixedSound(soundA, soundB, impactIntensity);
             const posA = bodyA.getPosition();
             const posB = bodyB.getPosition();
             spawnImpactParticles(
@@ -742,5 +741,3 @@ function closeEmitterPanel() {
     editingWallBody = null;
     updateInstructionText();
 }
-
-
