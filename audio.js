@@ -298,7 +298,21 @@ function populateScaleSelect() {
 }
 
 
-const volumes = { bass: 0.8, wood: 0.8, mid: 0.8, rubber: 0.8, high: 0.8, neon: 0.8, wall: 0.8 };
+const volumes = {
+    bass: 0.8,
+    wood: 0.8,
+    mid: 0.8,
+    rubber: 0.8,
+    high: 0.8,
+    neon: 0.8,
+    note_do: 0.8,
+    note_re: 0.8,
+    note_mi: 0.8,
+    note_fa: 0.8,
+    note_sol: 0.8,
+    note_la: 0.8,
+    note_si: 0.8
+};
 let masterVolume = 0.8;
 
 function updateVolume(type, val) {
@@ -381,7 +395,17 @@ function playMixedSound(typeA, typeB, velocity) {
     filter1.Q.setValueAtTime(timbre.resonance, now);
 
     const baseVol1 = volumes[primaryType] !== undefined ? volumes[primaryType] : 0.8;
-    const vol1 = Math.max(0.04, Math.min(0.25, velocity * 0.03)) * baseVol1 * masterVolume;
+
+    // Il parametro "velocity" qui è in realtà l'intensità d'impatto (velocità relativa
+    // combinata con la massa effettiva della coppia in collisione, vedi objects.js).
+    // Curva ampia e non lineare: urti leggeri restano nettamente sotto quelli forti,
+    // che invece si avvicinano al volume massimo.
+    const IMPACT_MIN_VOL = 0.02;
+    const IMPACT_MAX_VOL = 0.42;
+    const IMPACT_REF = 8; // intensità oltre la quale il volume è già vicino al massimo
+    const normalizedImpact = Math.min(1, velocity / IMPACT_REF);
+    const curvedImpact = Math.pow(normalizedImpact, 0.6);
+    const vol1 = (IMPACT_MIN_VOL + (IMPACT_MAX_VOL - IMPACT_MIN_VOL) * curvedImpact) * baseVol1 * masterVolume;
 
     const duration = currentTimbreMode === "pad" ? 3.5 : currentTimbreMode === "bell" ? 3.0 : 2.5;
 

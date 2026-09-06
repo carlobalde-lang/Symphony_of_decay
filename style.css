@@ -142,6 +142,8 @@
                 width: 280px;
                 max-height: calc(100vh - 30px);
                 overflow-y: auto;
+                overscroll-behavior: contain;
+                touch-action: pan-y;
                 transition:
                     transform 0.3s ease,
                     opacity 0.3s ease;
@@ -150,6 +152,7 @@
                 display: flex;
                 flex-direction: column;
                 gap: 6px;
+                flex-shrink: 0;
             }
             .tool-group label {
                 font-size: 11px;
@@ -253,6 +256,7 @@
                 border-radius: 8px;
                 overflow: hidden;
                 background: rgba(128, 128, 128, 0.06);
+                flex-shrink: 0;
             }
             .accordion + .accordion {
                 margin-top: 0;
@@ -467,6 +471,7 @@
                 grid-template-columns: 1fr 1fr;
                 gap: 6px;
                 margin-bottom: 4px;
+                flex-shrink: 0;
             }
             button.action-btn {
                 background: var(--btn-bg);
@@ -524,6 +529,7 @@
                     right: 10px;
                     width: calc(100vw - 40px);
                     max-width: 320px;
+                    max-height: calc(100vh - 65px);
                 }
                 #ui {
                     max-width: 200px;
