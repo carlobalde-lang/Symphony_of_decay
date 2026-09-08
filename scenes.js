@@ -51,8 +51,15 @@ function serializeScene() {
             emitterPaused: b.emitterPaused || false,
             emitterSyncEnabled: b.emitterSyncEnabled || false,
             emitterSyncDivision: b.emitterSyncDivision || null,
-            emitterPattern: b.emitterPattern && b.emitterPattern.length > 0 ? b.emitterPattern : null,
+            emitterSwing: typeof b.emitterSwing === "number" ? b.emitterSwing : 0,
+            emitterPattern: Array.isArray(b.emitterPattern) ? b.emitterPattern.map((s) => s ? { ...s } : null) : null,
             emitterPatternIndex: b.emitterPatternIndex || 0,
+            emitterPatternBanks: Array.isArray(b.emitterPatternBanks) && b.emitterPatternBanks.length
+                ? b.emitterPatternBanks.map((bank) => (Array.isArray(bank) ? bank.map((s) => s ? (typeof s === "string" ? s : { ...s }) : null) : null))
+                : null,
+            emitterActiveBank: typeof b.emitterActiveBank === "number" ? b.emitterActiveBank : 0,
+            emitterChainEnabled: b.emitterChainEnabled || false,
+            emitterChainPlayingBank: b.emitterChainPlayingBank || 0,
             remainingLifespanMs: b.lifespanMs ? Math.max(0, b.spawnedAtMs + b.lifespanMs - Date.now()) : null,
             linearDamping: b.getLinearDamping(),
             fixtures
@@ -156,8 +163,34 @@ function deserializeScene(data) {
             body.emitterPaused = bd.emitterPaused || false;
             body.emitterSyncEnabled = bd.emitterSyncEnabled || false;
             body.emitterSyncDivision = bd.emitterSyncDivision || 1;
-            body.emitterPattern = Array.isArray(bd.emitterPattern) ? bd.emitterPattern.slice() : [];
+            body.emitterSwing = typeof bd.emitterSwing === "number" ? bd.emitterSwing : 0;
+            if (Array.isArray(bd.emitterPattern) && bd.emitterPattern.length > 0) {
+                body.emitterPattern = bd.emitterPattern.map((s) => {
+                    if (!s) return null;
+                    if (typeof s === "string") return { t: (s && blockConfigs[s]) ? s : null, v: 1 };
+                    return s && s.t && blockConfigs[s.t] ? { t: s.t, v: typeof s.v === "number" ? s.v : 1 } : null;
+                });
+            } else {
+                body.emitterPattern = new Array(DEFAULT_PATTERN_LENGTH).fill(null);
+            }
             body.emitterPatternIndex = bd.emitterPatternIndex || 0;
+            if (Array.isArray(bd.emitterPatternBanks) && bd.emitterPatternBanks.length > 0) {
+                body.emitterPatternBanks = bd.emitterPatternBanks.map((bank) =>
+                    Array.isArray(bank)
+                        ? bank.map((s) => {
+                              if (!s) return null;
+                              if (typeof s === "string") return { t: (s && blockConfigs[s]) ? s : null, v: 1 };
+                              return s && s.t && blockConfigs[s.t] ? { t: s.t, v: typeof s.v === "number" ? s.v : 1 } : null;
+                          })
+                        : new Array(DEFAULT_PATTERN_LENGTH).fill(null)
+                );
+            } else {
+                ensurePatternBanks(body);
+            }
+            body.emitterActiveBank = typeof bd.emitterActiveBank === "number" ? Math.max(0, Math.min(bd.emitterActiveBank, body.emitterPatternBanks.length - 1)) : 0;
+            body.emitterPattern = (body.emitterPatternBanks[body.emitterActiveBank] || new Array(DEFAULT_PATTERN_LENGTH).fill(null)).map(normalizeStep);
+            body.emitterChainEnabled = bd.emitterChainEnabled || false;
+            body.emitterChainPlayingBank = bd.emitterChainPlayingBank || 0;
             // Ricalcolato da "ora": il timestamp precedente non ha più senso dopo un caricamento/undo.
             body.emitterNextFireMs = Date.now() + 60000 / body.emitterBPM;
             if (body.emitterSyncEnabled) alignEmitterToGrid(body);

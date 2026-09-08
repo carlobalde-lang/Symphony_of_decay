@@ -123,6 +123,15 @@ const blockConfigs = {
     note_sol: { name: "note_sol", isCircle: true, radius: 20, color: "#30b0c7", density: 0.3, restitution: 0.6 },
     note_la: { name: "note_la", isCircle: true, radius: 20, color: "#5e5ce6", density: 0.3, restitution: 0.6 },
     note_si: { name: "note_si", isCircle: true, radius: 20, color: "#af52de", density: 0.3, restitution: 0.6 },
+    // Sfere-strumento: batteria sintetizzata all'impatto (vedi playCollisionInstrument in audio.js)
+    inst_kick: { name: "inst_kick", isCircle: true, radius: 26, color: "#8b5cf6", density: 0.8, restitution: 0.2 },
+    inst_snare: { name: "inst_snare", isCircle: true, radius: 24, color: "#f1f2f6", density: 0.4, restitution: 0.4 },
+    inst_hihat_c: { name: "inst_hihat_c", isCircle: true, radius: 18, color: "#fbc531", density: 0.3, restitution: 0.7 },
+    inst_hihat_o: { name: "inst_hihat_o", isCircle: true, radius: 18, color: "#e1b12c", density: 0.3, restitution: 0.7 },
+    inst_clap: { name: "inst_clap", isCircle: true, radius: 20, color: "#e0a458", density: 0.35, restitution: 0.5 },
+    inst_conga: { name: "inst_conga", isCircle: true, radius: 24, color: "#b5533d", density: 0.65, restitution: 0.25 },
+    inst_bongo: { name: "inst_bongo", isCircle: true, radius: 22, color: "#d97b54", density: 0.6, restitution: 0.3 },
+    inst_clave: { name: "inst_clave", isCircle: true, radius: 17, color: "#57606f", density: 0.9, restitution: 0.45 },
     wall: {
         name: "wall",
         isRect: true,
@@ -154,6 +163,25 @@ function getEmitterSpawnableTypes() {
 }
 
 const EMITTER_MIN_INTERVAL_MS = 120; // limite di sicurezza a BPM molto alti
+const DEFAULT_PATTERN_LENGTH = 16; // step del sequencer stile drum machine
+const VELOCITY_LEVELS = [0.55, 1.0, 1.4]; // soft, mid, loud — moltiplicatori di potenza
+const VELOCITY_LABELS = ["·", "●", "◉"]; // indicatori visivi per i 3 livelli
+
+function normalizeStep(step) {
+    if (step === null || step === undefined) return null;
+    if (typeof step === "string") return { t: step, v: 1 };
+    if (typeof step === "object" && step !== null && step.t) return { t: step.t, v: typeof step.v === "number" ? step.v : 1 };
+    return null;
+}
+
+let _patternClipboard = null;
+let _isDragPainting = false;
+let _dragPaintMode = null; // "paint" | "clear"
+let _dragStartX = 0;
+let _dragStartY = 0;
+let _dragStartIndex = -1;
+let _justDragged = false;
+const DRAG_THRESHOLD = 6; // px di movimento necessario per attivare il drag-paint
 
 function spawnElement(x, y, typeKey) {
     const cfg = blockConfigs[typeKey];
@@ -190,8 +218,13 @@ function spawnElement(x, y, typeKey) {
             body.emitterPaused = false;
             body.emitterSyncEnabled = false;
             body.emitterSyncDivision = 1;
-            body.emitterPattern = [];
+            body.emitterPattern = new Array(DEFAULT_PATTERN_LENGTH).fill(null);
             body.emitterPatternIndex = 0;
+            body.emitterPatternBanks = [body.emitterPattern];
+            body.emitterActiveBank = 0;
+            body.emitterChainEnabled = false;
+            body.emitterChainPlayingBank = 0;
+            body.emitterSwing = 0;
         }
     } else if (cfg.sides === 4) {
         body.createFixture(planck.Box(cfg.size / SCALE, cfg.size / SCALE), {
@@ -265,6 +298,12 @@ world.on("begin-contact", (contact) => {
     const bodyA = contact.getFixtureA().getBody();
     const bodyB = contact.getFixtureB().getBody();
     if (bodyA.soundType && bodyB.soundType) {
+        // Proiettile appena spawnato: il contatto "alla bocca" (overlap con parete/oggetto)
+        // non deve suonare come un impatto reale. Dopo 50ms il corpo si è mosso davvero.
+        const nowMs = Date.now();
+        const graceMs = 50;
+        const recentSpawn = (body) => body.spawnedAtMs !== undefined && nowMs - body.spawnedAtMs < graceMs;
+        if (recentSpawn(bodyA) || recentSpawn(bodyB)) return;
         const velA = bodyA.getLinearVelocity();
         const velB = bodyB.getLinearVelocity();
         const relativeVel = Math.hypot(velA.x - velB.x, velA.y - velB.y);
@@ -417,29 +456,68 @@ function updateEmitters() {
     const now = Date.now();
     for (let b = world.getBodyList(); b; b = b.getNext()) {
         if (!b.isEmitter) continue;
-        if (b.emitterPaused || editingWallBody === b) continue;
+        if (b.emitterPaused) continue;
         if (now < b.emitterNextFireMs) continue;
+
+        const swingPct = (b.emitterSwing || 0) / 100;
 
         if (b.emitterSyncEnabled) {
             const beatLenMs = 60000 / globalClockBpm;
             const gridMs = Math.max(EMITTER_MIN_INTERVAL_MS, b.emitterSyncDivision * beatLenMs);
-            // Sommata alla griglia (non ricalcolata da "ora"): resta agganciata in fase
-            // con gli altri emettitori sincronizzati, senza drift.
-            while (b.emitterNextFireMs <= now) b.emitterNextFireMs += gridMs;
+            const isOdd = b.emitterPatternIndex % 2 === 1;
+            const swingOff = gridMs * swingPct * 0.5;
+            const actualGrid = isOdd ? gridMs + swingOff : gridMs - swingOff;
+            while (b.emitterNextFireMs <= now) b.emitterNextFireMs += Math.max(EMITTER_MIN_INTERVAL_MS, actualGrid);
         } else {
-            const intervalMs = Math.max(EMITTER_MIN_INTERVAL_MS, 60000 / Math.max(1, b.emitterBPM));
-            // Ricalcolata da "ora" (non sommata) per evitare raffiche di recupero dopo una pausa/lag.
-            b.emitterNextFireMs = now + intervalMs;
+            const baseInterval = Math.max(EMITTER_MIN_INTERVAL_MS, 60000 / Math.max(1, b.emitterBPM));
+            const isOdd = b.emitterPatternIndex % 2 === 1;
+            const swingOff = baseInterval * swingPct * 0.5;
+            const swingInterval = Math.max(EMITTER_MIN_INTERVAL_MS, isOdd ? baseInterval + swingOff : baseInterval - swingOff);
+            b.emitterNextFireMs = now + swingInterval;
         }
 
         if (getSpawnedBodyCount() >= MAX_BODIES) continue;
 
-        let spawnType;
-        if (b.emitterPattern && b.emitterPattern.length > 0) {
-            spawnType = b.emitterPattern[b.emitterPatternIndex % b.emitterPattern.length];
-            if (!blockConfigs[spawnType]) spawnType = "bass";
-            b.emitterPatternIndex = (b.emitterPatternIndex + 1) % b.emitterPattern.length;
+        let spawnType = null;
+        let spawnVel = 1;
+
+        // Playback con catena di banchi: se il chaining è attivo, gli step vengono
+        // letti dai banchi in sequenza (A → B → C → A...), altrimenti solo dal banco attivo.
+        const banks = Array.isArray(b.emitterPatternBanks) && b.emitterPatternBanks.length > 0
+            ? b.emitterPatternBanks
+            : null;
+        const chainOn = !!b.emitterChainEnabled && !!banks && banks.length > 1;
+
+        let playingPattern = b.emitterPattern || (banks ? banks[b.emitterActiveBank || 0] : null) || null;
+        let flashIdx = b.emitterPatternIndex;
+        if (chainOn) {
+            const playBank = banks[((b.emitterChainPlayingBank || 0) % banks.length + banks.length) % banks.length];
+            if (Array.isArray(playBank)) playingPattern = playBank;
+            flashIdx = (b.emitterPatternIndex % Math.max(1, playingPattern.length));
+        }
+
+        const hasPatternNotes = playingPattern && playingPattern.some((s) => stepType(s) && blockConfigs[stepType(s)]);
+        if (hasPatternNotes) {
+            const step = playingPattern[flashIdx];
+            b.emitterPatternIndex = (b.emitterPatternIndex + 1) % Math.max(1, playingPattern.length);
+            if (chainOn && b.emitterPatternIndex === 0) {
+                b.emitterChainPlayingBank = ((b.emitterChainPlayingBank || 0) + 1) % banks.length;
+            }
+            const sType = stepType(step);
+            if (sType && blockConfigs[sType]) {
+                spawnType = sType;
+                spawnVel = stepVelocity(step);
+            } else {
+                continue;
+            }
         } else {
+            if (chainOn) {
+                // In catena, un banco vuoto non deve bloccare la sequenza: avanza comunque.
+                b.emitterPatternIndex = (b.emitterPatternIndex + 1) % Math.max(1, playingPattern.length);
+                if (b.emitterPatternIndex === 0) {
+                    b.emitterChainPlayingBank = ((b.emitterChainPlayingBank || 0) + 1) % banks.length;
+                }
+            }
             spawnType = blockConfigs[b.emitterObjectType] ? b.emitterObjectType : "bass";
         }
         const cfg = blockConfigs[spawnType];
@@ -449,7 +527,11 @@ function updateEmitters() {
         const forward = b.getWorldVector(planck.Vec2(0, -1));
 
         const projectile = spawnElement(spawnPoint.x, spawnPoint.y, spawnType);
-        const power = b.emitterPower || 12;
+        projectile.spawnX = spawnPoint.x;
+        projectile.spawnY = spawnPoint.y;
+        projectile.spawnRadius = (cfg.radius || cfg.size || cfg.h / 2 || 20) / SCALE;
+        projectile.spawnedAtMs = Date.now();
+        const power = (b.emitterPower || 12) * (VELOCITY_LEVELS[spawnVel] || 1);
         projectile.setLinearVelocity(planck.Vec2(forward.x * power, forward.y * power));
 
         if (b.emitterLifetime > 0) {
@@ -458,6 +540,11 @@ function updateEmitters() {
         }
 
         spawnImpactParticles(spawnPoint.x, spawnPoint.y, "#f1c40f", power * 0.4);
+        const activeBank2 = b.emitterActiveBank || 0;
+        if (Array.isArray(playingPattern) && playingPattern.length > 0) {
+            const sameBank = !chainOn || ((b.emitterChainPlayingBank || 0) % Math.max(1, banks.length)) === activeBank2;
+            if (sameBank) flashStepCell(b, flashIdx);
+        }
     }
 }
 
@@ -515,61 +602,509 @@ function populatePatternAddSelect() {
     if (prevValue && getEmitterSpawnableTypes().includes(prevValue)) sel.value = prevValue;
 }
 
+// --- Drum-machine style step sequencer ---
+
+function ensurePatternArray(body, length) {
+    if (!body.emitterPattern || !Array.isArray(body.emitterPattern)) {
+        body.emitterPattern = new Array(length || DEFAULT_PATTERN_LENGTH).fill(null);
+    }
+    body.emitterPattern = body.emitterPattern.map(normalizeStep);
+    ensurePatternBanks(body);
+    if (Array.isArray(body.emitterPatternBanks) && body.emitterPatternBanks.length) {
+        body.emitterPatternBanks[body.emitterActiveBank || 0] = body.emitterPattern;
+    }
+    return body.emitterPattern;
+}
+
+// --- Banchi pattern (A/B/C) + chaining ---
+// Ogni emitter può avere più "banchi" (batterie di step separate). Con il chaining
+// attivo i banchi suonano in sequenza (A→B→C→A...); altrimenti suona solo il banco attivo.
+const MAX_PATTERN_BANKS = 4;
+
+function ensurePatternBanks(body) {
+    if (!body.emitterPatternBanks || !Array.isArray(body.emitterPatternBanks) || body.emitterPatternBanks.length === 0) {
+        body.emitterPatternBanks = [body.emitterPattern || new Array(DEFAULT_PATTERN_LENGTH).fill(null)];
+    }
+    if (typeof body.emitterActiveBank !== "number" || body.emitterActiveBank < 0 || body.emitterActiveBank >= body.emitterPatternBanks.length) {
+        body.emitterActiveBank = 0;
+    }
+    return body.emitterPatternBanks;
+}
+
+function saveActiveBank(body) {
+    const banks = ensurePatternBanks(body);
+    banks[body.emitterActiveBank] = (body.emitterPattern || []).map((s) => s ? (typeof s === "string" ? s : { ...s }) : null);
+    return banks;
+}
+
+function setEmitterActiveBank(idx) {
+    if (!currentEmitterPanelBody) return;
+    const banks = ensurePatternBanks(currentEmitterPanelBody);
+    const clamped = Math.max(0, Math.min(idx, banks.length - 1));
+    if (clamped === currentEmitterPanelBody.emitterActiveBank) return;
+    banks[currentEmitterPanelBody.emitterActiveBank] = (currentEmitterPanelBody.emitterPattern || []).map((s) => s ? (typeof s === "string" ? s : { ...s }) : null);
+    currentEmitterPanelBody.emitterActiveBank = clamped;
+    currentEmitterPanelBody.emitterPattern = (banks[clamped] || new Array(DEFAULT_PATTERN_LENGTH).fill(null)).map(normalizeStep);
+    banks[clamped] = currentEmitterPanelBody.emitterPattern;
+    currentEmitterPanelBody.emitterPatternIndex = 0;
+    renderEmitterPattern();
+    renderEmitterBankBar();
+}
+
+function addPatternBank() {
+    if (!currentEmitterPanelBody) return;
+    const banks = ensurePatternBanks(currentEmitterPanelBody);
+    if (banks.length >= MAX_PATTERN_BANKS) return;
+    saveActiveBank(currentEmitterPanelBody);
+    const newBank = new Array((currentEmitterPanelBody.emitterPattern && currentEmitterPanelBody.emitterPattern.length) || DEFAULT_PATTERN_LENGTH).fill(null);
+    banks.push(newBank);
+    currentEmitterPanelBody.emitterActiveBank = banks.length - 1;
+    currentEmitterPanelBody.emitterPattern = newBank;
+    currentEmitterPanelBody.emitterPatternIndex = 0;
+    renderEmitterPattern();
+    renderEmitterBankBar();
+}
+
+function removePatternBank() {
+    if (!currentEmitterPanelBody) return;
+    const banks = ensurePatternBanks(currentEmitterPanelBody);
+    if (banks.length <= 1) return;
+    banks.splice(currentEmitterPanelBody.emitterActiveBank, 1);
+    currentEmitterPanelBody.emitterActiveBank = Math.max(0, currentEmitterPanelBody.emitterActiveBank - 1);
+    currentEmitterPanelBody.emitterPattern = (banks[currentEmitterPanelBody.emitterActiveBank] || new Array(DEFAULT_PATTERN_LENGTH).fill(null)).map(normalizeStep);
+    banks[currentEmitterPanelBody.emitterActiveBank] = currentEmitterPanelBody.emitterPattern;
+    currentEmitterPanelBody.emitterPatternIndex = 0;
+    renderEmitterPattern();
+    renderEmitterBankBar();
+}
+
+function toggleEmitterChain(enabled) {
+    if (!currentEmitterPanelBody) return;
+    currentEmitterPanelBody.emitterChainEnabled = !!enabled;
+    renderEmitterBankBar();
+}
+
+function renderEmitterBankBar() {
+    const container = document.getElementById("emitter-bank-bar");
+    if (!container || !currentEmitterPanelBody) return;
+    const banks = ensurePatternBanks(currentEmitterPanelBody);
+    const active = currentEmitterPanelBody.emitterActiveBank;
+    container.innerHTML = "";
+    banks.forEach((bank, i) => {
+        const btn = document.createElement("button");
+        btn.className = "sub-btn" + (i === active ? " bank-btn-active" : "");
+        btn.textContent = String.fromCharCode(65 + i);
+        btn.title = "Bank " + String.fromCharCode(65 + i);
+        btn.onclick = () => setEmitterActiveBank(i);
+        container.appendChild(btn);
+    });
+    const addBtn = document.createElement("button");
+    addBtn.className = "sub-btn";
+    addBtn.textContent = "+";
+    addBtn.title = "Add bank";
+    addBtn.onclick = addPatternBank;
+    container.appendChild(addBtn);
+    if (banks.length > 1) {
+        const rmBtn = document.createElement("button");
+        rmBtn.className = "sub-btn";
+        rmBtn.textContent = "−";
+        rmBtn.title = "Remove bank";
+        rmBtn.onclick = removePatternBank;
+        container.appendChild(rmBtn);
+        const chainLbl = document.createElement("label");
+        chainLbl.className = "chain-toggle-label";
+        chainLbl.innerHTML = `<input type="checkbox" ${currentEmitterPanelBody.emitterChainEnabled ? "checked" : ""} onchange="toggleEmitterChain(this.checked)"> ${t("emitter-chain-label")}`;
+        container.appendChild(chainLbl);
+    }
+}
+
+function shortLabelForType(typeKey) {
+    if (!typeKey) return "";
+    const noteMap = {
+        note_do: "Do", note_re: "Re", note_mi: "Mi", note_fa: "Fa",
+        note_sol: "Sol", note_la: "La", note_si: "Si"
+    };
+    if (noteMap[typeKey]) return noteMap[typeKey];
+    const shapeMap = {
+        bass: "Oro", wood: "Pen", mid: "Hex",
+        rubber: "Sep", high: "Oct", neon: "Ast"
+    };
+    if (shapeMap[typeKey]) return shapeMap[typeKey];
+    const instMap = {
+        inst_kick: "Kick", inst_snare: "Snare", inst_hihat_c: "HHC",
+        inst_hihat_o: "HHO", inst_clap: "Clap", inst_conga: "Conga",
+        inst_bongo: "Bongo", inst_clave: "Clave"
+    };
+    if (instMap[typeKey]) return instMap[typeKey];
+    return typeKey.slice(0, 3);
+}
+
+function stepType(step) {
+    if (!step) return null;
+    return typeof step === "string" ? step : (step.t || null);
+}
+function stepVelocity(step) {
+    if (!step) return 1;
+    return typeof step === "number" ? 1 : (typeof step === "object" ? (step.v ?? 1) : 1);
+}
+
 function renderEmitterPattern() {
     const container = document.getElementById("emitter-pattern-steps");
     const objectSelect = document.getElementById("emitter-object-select");
+    const emptyHint = document.getElementById("emitter-pattern-empty-hint");
     if (!container || !currentEmitterPanelBody) return;
 
-    const pattern = currentEmitterPanelBody.emitterPattern || [];
-    container.innerHTML = "";
-
-    if (pattern.length === 0) {
-        const empty = document.createElement("span");
-        empty.className = "pattern-empty-hint";
-        empty.textContent = t("emitter-pattern-empty");
-        container.appendChild(empty);
-    } else {
-        pattern.forEach((typeKey, i) => {
-            const chip = document.createElement("span");
-            chip.className = "pattern-step-chip";
-            const label = document.createElement("span");
-            label.textContent = t("obj-" + typeKey).replace(/^[^\s]+\s/, ""); // toglie l'emoji per compattezza
-            const del = document.createElement("button");
-            del.textContent = "✕";
-            del.onclick = () => removePatternStep(i);
-            chip.appendChild(label);
-            chip.appendChild(del);
-            container.appendChild(chip);
+    if (!container._delegationAttached) {
+        container.addEventListener("click", (e) => {
+            if (_justDragged) { e.preventDefault(); return; }
+            const cell = e.target.closest(".drum-step");
+            if (cell && cell.dataset.index !== undefined) {
+                e.preventDefault();
+                paintPatternStep(parseInt(cell.dataset.index, 10));
+            }
         });
+        container.addEventListener("contextmenu", (e) => {
+            e.preventDefault();
+            const cell = e.target.closest(".drum-step");
+            if (cell && cell.dataset.index !== undefined) {
+                clearPatternStep(parseInt(cell.dataset.index, 10));
+            }
+        });
+        container.addEventListener("dblclick", (e) => {
+            e.preventDefault();
+            const cell = e.target.closest(".drum-step");
+            if (cell && cell.dataset.index !== undefined) {
+                clearPatternStep(parseInt(cell.dataset.index, 10));
+            }
+        });
+        container.addEventListener("mousedown", (e) => {
+            _dragStartX = e.clientX;
+            _dragStartY = e.clientY;
+            const cell = e.target.closest(".drum-step");
+            _dragStartIndex = cell && cell.dataset.index !== undefined ? parseInt(cell.dataset.index, 10) : -1;
+        });
+        container.addEventListener("mousemove", (e) => {
+            if (_isDragPainting) return;
+            if (e.buttons === 0) return;
+            const dx = e.clientX - _dragStartX;
+            const dy = e.clientY - _dragStartY;
+            if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+            _isDragPainting = true;
+            _dragPaintMode = e.buttons === 1 ? "paint" : "clear";
+            // Dipingi anche la cella da cui è partito il drag (quella del mousedown)
+            if (_dragStartIndex >= 0) {
+                if (_dragPaintMode === "paint") paintPatternStep(_dragStartIndex, true, true);
+                else clearPatternStep(_dragStartIndex, true);
+            }
+        });
+        container.addEventListener("mouseover", (e) => {
+            if (!_isDragPainting || !currentEmitterPanelBody) return;
+            const cell = e.target.closest(".drum-step");
+            if (!cell || cell.dataset.index === undefined) return;
+            const idx = parseInt(cell.dataset.index, 10);
+            if (_dragPaintMode === "paint") paintPatternStep(idx, true, true);
+            else clearPatternStep(idx, true);
+        });
+        container._delegationAttached = true;
     }
 
-    if (objectSelect) objectSelect.disabled = pattern.length > 0;
+    const pattern = ensurePatternArray(currentEmitterPanelBody);
+    const len = pattern.length;
+    container.innerHTML = "";
+    container.style.gridTemplateColumns = len <= 8 ? `repeat(${len}, 1fr)` : "repeat(8, 1fr)";
+
+    const currentIdx = currentEmitterPanelBody.emitterPatternIndex % Math.max(1, len);
+
+    pattern.forEach((step, i) => {
+        const typeKey = stepType(step);
+        const vel = stepVelocity(step);
+        const cell = document.createElement("div");
+        cell.className = "drum-step" + (typeKey ? " filled" : "") + (i === currentIdx ? " active" : "");
+        cell.dataset.index = i;
+
+        const num = document.createElement("span");
+        num.className = "step-num";
+        num.textContent = i + 1;
+        cell.appendChild(num);
+
+        if (typeKey) {
+            const label = document.createElement("span");
+            label.className = "step-label";
+            label.textContent = shortLabelForType(typeKey);
+            const cfg = blockConfigs[typeKey];
+            if (cfg && cfg.color) {
+                cell.style.borderColor = cfg.color;
+                cell.style.boxShadow = `0 0 6px ${cfg.color}55`;
+            }
+            cell.appendChild(label);
+
+            const velDot = document.createElement("span");
+            velDot.className = "step-velocity";
+            velDot.textContent = VELOCITY_LABELS[vel] || VELOCITY_LABELS[1];
+            velDot.style.opacity = 0.4 + vel * 0.3;
+            cell.appendChild(velDot);
+        }
+
+        container.appendChild(cell);
+    });
+
+    const hasAny = pattern.some((s) => stepType(s));
+    if (objectSelect) objectSelect.disabled = hasAny;
+    if (emptyHint) emptyHint.style.display = hasAny ? "none" : "block";
 }
 
-function addPatternStep() {
+function updatePlayheadHighlight() {
+    const container = document.getElementById("emitter-pattern-steps");
+    if (!container || !currentEmitterPanelBody) return;
+    const pattern = ensurePatternArray(currentEmitterPanelBody);
+    const currentIdx = currentEmitterPanelBody.emitterPatternIndex % Math.max(1, pattern.length);
+    const cells = container.querySelectorAll(".drum-step");
+    cells.forEach((cell, i) => {
+        cell.classList.toggle("active", i === currentIdx);
+    });
+}
+
+function paintPatternStep(index, skipRender, force) {
     if (!currentEmitterPanelBody) return;
     const sel = document.getElementById("emitter-pattern-add-select");
     if (!sel || !sel.value) return;
-    if (!currentEmitterPanelBody.emitterPattern) currentEmitterPanelBody.emitterPattern = [];
-    currentEmitterPanelBody.emitterPattern.push(sel.value);
+    const pattern = ensurePatternArray(currentEmitterPanelBody);
+    if (index < 0 || index >= pattern.length) return;
+    const current = pattern[index];
+    const currentType = stepType(current);
+    const selectedType = sel.value;
+    if (force && currentType === selectedType) {
+        // durante il drag, non ciclare velocità su celle già identiche: lascia invariato
+        if (!skipRender) renderEmitterPattern();
+        return;
+    }
+    if (current && currentType === selectedType) {
+        const curVel = stepVelocity(current);
+        if (curVel < 2) {
+            pattern[index] = { t: selectedType, v: curVel + 1 };
+        } else {
+            pattern[index] = null;
+        }
+    } else {
+        pattern[index] = { t: selectedType, v: 1 };
+    }
+    if (!skipRender) renderEmitterPattern();
+}
+
+function clearPatternStep(index, skipRender) {
+    if (!currentEmitterPanelBody) return;
+    const pattern = ensurePatternArray(currentEmitterPanelBody);
+    if (index < 0 || index >= pattern.length) return;
+    pattern[index] = null;
+    if (!skipRender) renderEmitterPattern();
+}
+
+function setPatternLength(newLen) {
+    if (!currentEmitterPanelBody) return;
+    newLen = Math.max(1, Math.min(32, parseInt(newLen, 10) || DEFAULT_PATTERN_LENGTH));
+    const old = currentEmitterPanelBody.emitterPattern || [];
+    const next = new Array(newLen).fill(null);
+    for (let i = 0; i < Math.min(old.length, newLen); i++) next[i] = old[i];
+    currentEmitterPanelBody.emitterPattern = next;
+    if (currentEmitterPanelBody.emitterPatternIndex >= newLen) {
+        currentEmitterPanelBody.emitterPatternIndex = 0;
+    }
     renderEmitterPattern();
 }
 
-function removePatternStep(index) {
-    if (!currentEmitterPanelBody || !currentEmitterPanelBody.emitterPattern) return;
-    currentEmitterPanelBody.emitterPattern.splice(index, 1);
-    if (currentEmitterPanelBody.emitterPatternIndex >= currentEmitterPanelBody.emitterPattern.length) {
-        currentEmitterPanelBody.emitterPatternIndex = 0;
+function shiftPattern(dir) {
+    if (!currentEmitterPanelBody) return;
+    const pattern = ensurePatternArray(currentEmitterPanelBody);
+    if (pattern.length === 0) return;
+    if (dir > 0) {
+        const last = pattern.pop();
+        pattern.unshift(last);
+    } else {
+        const first = pattern.shift();
+        pattern.push(first);
     }
     renderEmitterPattern();
 }
 
 function clearEmitterPattern() {
     if (!currentEmitterPanelBody) return;
-    currentEmitterPanelBody.emitterPattern = [];
+    const len = (currentEmitterPanelBody.emitterPattern && currentEmitterPanelBody.emitterPattern.length) || DEFAULT_PATTERN_LENGTH;
+    currentEmitterPanelBody.emitterPattern = new Array(len).fill(null);
     currentEmitterPanelBody.emitterPatternIndex = 0;
     renderEmitterPattern();
 }
+
+let _patternPlayheadTimer = null;
+function startPatternPlayheadRefresh() {
+    if (_patternPlayheadTimer) return;
+    _patternPlayheadTimer = setInterval(() => {
+        if (currentEmitterPanelBody && document.getElementById("emitter-panel")?.style.display !== "none") {
+            updatePlayheadHighlight();
+        } else {
+            stopPatternPlayheadRefresh();
+        }
+    }, 120);
+}
+function stopPatternPlayheadRefresh() {
+    if (_patternPlayheadTimer) {
+        clearInterval(_patternPlayheadTimer);
+        _patternPlayheadTimer = null;
+    }
+}
+
+function flashStepCell(emitterBody, stepIndex) {
+    if (currentEmitterPanelBody !== emitterBody) return;
+    const container = document.getElementById("emitter-pattern-steps");
+    if (!container) return;
+    const cells = container.querySelectorAll(".drum-step");
+    if (cells[stepIndex]) {
+        cells[stepIndex].classList.add("flash");
+        setTimeout(() => cells[stepIndex]?.classList.remove("flash"), 180);
+    }
+}
+
+function setEmitterSwing(value) {
+    const val = parseFloat(value) || 0;
+    document.getElementById("val-emitter-swing").innerText = val;
+    if (currentEmitterPanelBody) currentEmitterPanelBody.emitterSwing = val;
+}
+
+function copyEmitterPattern() {
+    if (!currentEmitterPanelBody) return;
+    _patternClipboard = currentEmitterPanelBody.emitterPattern.map((s) => s ? { ...s } : null);
+    flashMessage("📋 Pattern copied", "#2ed573");
+}
+
+function pasteEmitterPattern() {
+    if (!currentEmitterPanelBody || !_patternClipboard) return;
+    const newLen = _patternClipboard.length;
+    currentEmitterPanelBody.emitterPattern = _patternClipboard.map((s) => s ? { ...s } : null);
+    if (currentEmitterPanelBody.emitterPatternIndex >= newLen) {
+        currentEmitterPanelBody.emitterPatternIndex = 0;
+    }
+    renderEmitterPattern();
+    flashMessage("📋 Pattern pasted", "#2ed573");
+}
+
+const PATTERN_PRESETS = {
+    "four-on-floor": () => {
+        const p = new Array(16).fill(null);
+        [0, 4, 8, 12].forEach((i) => (p[i] = { t: "inst_kick", v: 1 }));
+        [2, 6, 10, 14].forEach((i) => (p[i] = { t: "inst_hihat_c", v: 1 }));
+        return p;
+    },
+    "hihat-8th": () => {
+        const p = new Array(16).fill(null);
+        [0, 2, 4, 6, 8, 10, 12, 14].forEach((i) => (p[i] = { t: "inst_hihat_c", v: 1 }));
+        return p;
+    },
+    "hihat-16th": () => {
+        const p = new Array(16).fill(null);
+        p.forEach((_, i) => {
+            if (i % 4 === 0) p[i] = { t: "inst_hihat_o", v: 2 };
+            else if (i % 2 === 0) p[i] = { t: "inst_hihat_c", v: 1 };
+        });
+        return p;
+    },
+    "kick-snare": () => {
+        const p = new Array(16).fill(null);
+        [0, 8].forEach((i) => (p[i] = { t: "inst_kick", v: 2 }));
+        [4, 12].forEach((i) => (p[i] = { t: "inst_snare", v: 1 }));
+        return p;
+    },
+    "breakbeat": () => {
+        const p = new Array(16).fill(null);
+        p[0] = { t: "inst_kick", v: 2 };
+        p[3] = { t: "inst_snare", v: 1 };
+        p[4] = { t: "inst_kick", v: 1 };
+        p[6] = { t: "inst_kick", v: 2 };
+        p[7] = { t: "inst_snare", v: 2 };
+        p[10] = { t: "inst_kick", v: 1 };
+        p[11] = { t: "inst_hihat_c", v: 1 };
+        p[12] = { t: "inst_snare", v: 1 };
+        p[14] = { t: "inst_bongo", v: 1 };
+        p[15] = { t: "inst_bongo", v: 2 };
+        return p;
+    },
+    "clave-3-2": () => {
+        const p = new Array(16).fill(null);
+        [0, 3, 6].forEach((i) => (p[i] = { t: "inst_clave", v: 2 }));
+        [10, 13].forEach((i) => (p[i] = { t: "inst_clave", v: 2 }));
+        [0, 8].forEach((i) => (p[i] = { t: "inst_conga", v: 1 }));
+        [4, 12].forEach((i) => (p[i] = { t: "inst_bongo", v: 1 }));
+        return p;
+    },
+    "clave-2-3": () => {
+        const p = new Array(16).fill(null);
+        [0, 3].forEach((i) => (p[i] = { t: "inst_clave", v: 2 }));
+        [6, 10, 13].forEach((i) => (p[i] = { t: "inst_clave", v: 2 }));
+        [0, 8].forEach((i) => (p[i] = { t: "inst_conga", v: 1 }));
+        [4, 12].forEach((i) => (p[i] = { t: "inst_bongo", v: 1 }));
+        return p;
+    },
+    "dembow": () => {
+        const p = new Array(16).fill(null);
+        [0, 6, 12].forEach((i) => (p[i] = { t: "inst_kick", v: 2 }));
+        [4, 14].forEach((i) => (p[i] = { t: "inst_snare", v: 2 }));
+        [2, 8, 10].forEach((i) => (p[i] = { t: "inst_hihat_c", v: 1 }));
+        p[15] = { t: "inst_clap", v: 1 };
+        return p;
+    },
+    "reggae-skank": () => {
+        const p = new Array(16).fill(null);
+        [0, 8].forEach((i) => (p[i] = { t: "inst_kick", v: 2 }));
+        [4, 12].forEach((i) => (p[i] = { t: "inst_snare", v: 1 }));
+        [2, 4, 6, 10, 12, 14].forEach((i) => (p[i] = { t: "inst_hihat_c", v: 1 }));
+        return p;
+    },
+    "half-time": () => {
+        const p = new Array(16).fill(null);
+        p[0] = { t: "inst_kick", v: 2 };
+        p[7] = { t: "inst_snare", v: 2 };
+        p[8] = { t: "inst_kick", v: 1 };
+        p[15] = { t: "inst_snare", v: 2 };
+        [4, 12].forEach((i) => (p[i] = { t: "inst_hihat_c", v: 2 }));
+        [6, 14].forEach((i) => (p[i] = { t: "inst_hihat_o", v: 1 }));
+        return p;
+    },
+    "afro-latin": () => {
+        const p = new Array(16).fill(null);
+        [0, 4, 8, 12].forEach((i) => (p[i] = { t: "inst_conga", v: 2 }));
+        [2, 6, 10, 14].forEach((i) => (p[i] = { t: "inst_bongo", v: 1 }));
+        [3, 7, 11].forEach((i) => (p[i] = { t: "inst_clave", v: 2 }));
+        [15].forEach((i) => (p[i] = { t: "inst_hihat_o", v: 1 }));
+        return p;
+    },
+    "melody-asc": () => {
+        const notes = ["note_do", "note_re", "note_mi", "note_fa", "note_sol", "note_la", "note_si", "note_do"];
+        return notes.map((n) => ({ t: n, v: 1 }));
+    },
+    "arpeggio-16": () => {
+        const notes = ["note_do", "note_mi", "note_sol", "note_si"];
+        return new Array(16).fill(null).map((_, i) => ({ t: notes[i % notes.length], v: (i % 4) + 1 }));
+    },
+    "random-16": () => {
+        const types = getEmitterSpawnableTypes();
+        return new Array(16).fill(null).map(() => Math.random() > 0.4 ? { t: types[Math.floor(Math.random() * types.length)], v: Math.floor(Math.random() * 3) } : null);
+    }
+};
+
+function applyPatternPreset(key) {
+    if (!currentEmitterPanelBody || !PATTERN_PRESETS[key]) return;
+    currentEmitterPanelBody.emitterPattern = PATTERN_PRESETS[key]();
+    currentEmitterPanelBody.emitterPatternIndex = 0;
+    renderEmitterPattern();
+}
+
+function closeDragPaint() {
+    if (_isDragPainting) {
+        _isDragPainting = false;
+        _justDragged = true;
+        renderEmitterPattern();
+        setTimeout(() => { _justDragged = false; }, 50);
+    }
+}
+document.addEventListener("mouseup", closeDragPaint);
 
 function populateSyncDivisionSelect() {
     const sel = document.getElementById("emitter-sync-division-select");
@@ -616,7 +1151,7 @@ function positionEmitterPanel(target) {
     const ex = pos.x * SCALE;
     const ey = pos.y * SCALE;
 
-    const panelW = panel.offsetWidth || 260;
+    const panelW = panel.offsetWidth || 300;
     const panelH = panel.offsetHeight || 300;
 
     // Zone da evitare: toolbox principale (se visibile) e box info in alto a sinistra
@@ -649,6 +1184,7 @@ function positionEmitterPanel(target) {
 }
 
 function updateEmitterPanelPosition() {
+    if (_emitterPanelUserMoved) return;
     if (currentEmitterPanelBody) positionEmitterPanel(currentEmitterPanelBody);
 }
 
@@ -660,6 +1196,7 @@ function syncEmitterPanel() {
 
     if (target !== currentEmitterPanelBody) {
         currentEmitterPanelBody = target;
+        _emitterPanelUserMoved = false;
         if (target) {
             populateEmitterObjectSelect();
             document.getElementById("emitter-object-select").value = target.emitterObjectType;
@@ -675,17 +1212,28 @@ function syncEmitterPanel() {
             document.getElementById("emitter-sync-division-select").value = target.emitterSyncDivision;
             document.getElementById("slider-global-clock-bpm").value = globalClockBpm;
             document.getElementById("val-global-clock-bpm").innerText = Math.round(globalClockBpm);
-            if (!target.emitterPattern) target.emitterPattern = [];
+            if (!Array.isArray(target.emitterPattern) || target.emitterPattern.length === 0) {
+                target.emitterPattern = new Array(DEFAULT_PATTERN_LENGTH).fill(null);
+            }
+            ensurePatternArray(target, target.emitterPattern.length || DEFAULT_PATTERN_LENGTH);
             populatePatternAddSelect();
             renderEmitterPattern();
+            renderEmitterBankBar();
+            startPatternPlayheadRefresh();
             updateSyncControlsEnabled(target);
             updateEmitterPauseButtonLabel();
+            const swingSlider = document.getElementById("slider-emitter-swing");
+            if (swingSlider) swingSlider.value = target.emitterSwing || 0;
+            const swingVal = document.getElementById("val-emitter-swing");
+            if (swingVal) swingVal.innerText = target.emitterSwing || 0;
             panel.style.visibility = "hidden";
             panel.style.display = "flex";
+            initEmitterPanelDrag();
             positionEmitterPanel(target);
             panel.style.visibility = "visible";
         } else {
             panel.style.display = "none";
+            stopPatternPlayheadRefresh();
         }
     }
 }
@@ -739,5 +1287,63 @@ function toggleEmitterPaused() {
 
 function closeEmitterPanel() {
     editingWallBody = null;
+    _isDragPainting = false;
+    stopPatternPlayheadRefresh();
     updateInstructionText();
+}
+
+// --- Pannello emitter trascinabile ---
+// Il drag sull'header disabilita il riposizionamento automatico (che altrimenti
+// a ogni frame rimanderebbe il pannello vicino all'emettitore): la posizione
+// scelta dall'utente resta valida finché non si apre il pannello su un altro emitter.
+
+let _emitterPanelUserMoved = false;
+let _emitterPanelDragState = null;
+
+function initEmitterPanelDrag() {
+    const panel = document.getElementById("emitter-panel");
+    if (!panel || panel._dragAttached) return;
+
+    const header = panel.querySelector(".emitter-panel-header");
+    if (!header) return;
+    panel._dragAttached = true;
+
+    header.addEventListener("pointerdown", (e) => {
+        if (e.target.closest("button")) return;
+        if (e.button !== undefined && e.button !== 0) return;
+        const rect = panel.getBoundingClientRect();
+        _emitterPanelDragState = {
+            startX: e.clientX,
+            startY: e.clientY,
+            startLeft: rect.left,
+            startTop: rect.top
+        };
+        _emitterPanelUserMoved = true;
+        panel.classList.add("dragging");
+        e.preventDefault();
+    });
+
+    document.addEventListener("pointermove", (e) => {
+        if (!_emitterPanelDragState) return;
+        const margin = 8;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const deltaX = e.clientX - _emitterPanelDragState.startX;
+        const deltaY = e.clientY - _emitterPanelDragState.startY;
+        let left = _emitterPanelDragState.startLeft + deltaX;
+        let top = _emitterPanelDragState.startTop + deltaY;
+        const panelW = panel.offsetWidth;
+        const panelH = panel.offsetHeight;
+        left = Math.min(Math.max(left, margin), Math.max(margin, vw - panelW - margin));
+        top = Math.min(Math.max(top, margin), Math.max(margin, vh - panelH - margin));
+        panel.style.left = left + "px";
+        panel.style.top = top + "px";
+    });
+
+    document.addEventListener("pointerup", () => {
+        if (_emitterPanelDragState) {
+            _emitterPanelDragState = null;
+            panel.classList.remove("dragging");
+        }
+    });
 }

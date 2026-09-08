@@ -309,9 +309,17 @@ const volumes = {
     note_re: 0.8,
     note_mi: 0.8,
     note_fa: 0.8,
-    note_sol: 0.8,
+note_sol: 0.8,
     note_la: 0.8,
-    note_si: 0.8
+    note_si: 0.8,
+    inst_kick: 0.8,
+    inst_snare: 0.8,
+    inst_hihat_c: 0.8,
+    inst_hihat_o: 0.8,
+    inst_clap: 0.8,
+    inst_conga: 0.8,
+    inst_bongo: 0.8,
+    inst_clave: 0.8
 };
 let masterVolume = 0.8;
 
@@ -369,6 +377,10 @@ function stealOldestVoiceIfNeeded() {
 
 function playMixedSound(typeA, typeB, velocity) {
     if (audioCtx.state === "suspended") audioCtx.resume();
+    // Sfere-strumento (kick, snare, hi-hat...): suonano la batteria sintetizzata
+    // usando l'intensità d'impatto, senza passare dagli oscillator melodici.
+    if (isInstrumentType(typeA)) return playCollisionInstrument(typeA, velocity);
+    if (isInstrumentType(typeB)) return playCollisionInstrument(typeB, velocity);
     activeSoundsCount++;
     stealOldestVoiceIfNeeded();
 
@@ -467,5 +479,261 @@ function playMixedSound(typeA, typeB, velocity) {
     }
 
     addScore(vol1);
+}
+
+// --- Sintesi strumenti sequencer (batteria + clavicembalo) ---
+// Il sequencer può suonare questi strumenti direttamente: nessun corpo fisico
+// viene spawnato, solo il suono sintetizzato. Le celle nel pattern rappresentano
+// strumenti reali (kick, snare, hi-hat...) o note (Do-Si suonate come clavicembalo).
+
+const AUDIO_VELOCITY = [0.45, 0.7, 1.0]; // soft, mid, loud — guadagni proporzionali
+
+const _noiseBufferCache = {};
+function getNoiseBuffer(durationSec) {
+    const key = Math.max(1, Math.round(durationSec * 20));
+    if (!_noiseBufferCache[key]) {
+        const rate = audioCtx.sampleRate;
+        const len = Math.max(1, Math.round(rate * (key / 20)));
+        const buf = audioCtx.createBuffer(1, len, rate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+        _noiseBufferCache[key] = buf;
+    }
+    return _noiseBufferCache[key];
+}
+
+function registerVoice(oscillators, gains) {
+    const entry = { oscillators, gains };
+    activeVoices.push(entry);
+    return entry;
+}
+function forgetVoice(entry) {
+    const idx = activeVoices.indexOf(entry);
+    if (idx !== -1) activeVoices.splice(idx, 1);
+    activeSoundsCount = Math.max(0, activeSoundsCount - 1);
+}
+function beginVoice() {
+    activeSoundsCount++;
+    stealOldestVoiceIfNeeded();
+}
+
+function playKick(v) {
+    const now = getScheduledTime(audioCtx.currentTime);
+    beginVoice();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(170, now);
+    osc.frequency.exponentialRampToValueAtTime(48, now + 0.12);
+    gain.gain.setValueAtTime(0.9 * v * masterVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
+    osc.connect(gain);
+    connectToEffectsBus(gain);
+    osc.start(now);
+    osc.stop(now + 0.55);
+    const entry = registerVoice([osc], [gain]);
+    osc.onended = () => forgetVoice(entry);
+}
+
+function playSnare(v) {
+    const now = getScheduledTime(audioCtx.currentTime);
+    beginVoice();
+    const body = audioCtx.createOscillator();
+    const bg = audioCtx.createGain();
+    body.type = "triangle";
+    body.frequency.setValueAtTime(190, now);
+    body.frequency.exponentialRampToValueAtTime(120, now + 0.12);
+    bg.gain.setValueAtTime(0.55 * v * masterVolume, now);
+    bg.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+    body.connect(bg);
+    connectToEffectsBus(bg);
+    body.start(now);
+    body.stop(now + 0.18);
+
+    const src = audioCtx.createBufferSource();
+    src.buffer = getNoiseBuffer(0.28);
+    const bp = audioCtx.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = 1800;
+    bp.Q.value = 0.8;
+    const ng = audioCtx.createGain();
+    ng.gain.setValueAtTime(0.7 * v * masterVolume, now);
+    ng.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+    src.connect(bp);
+    bp.connect(ng);
+    connectToEffectsBus(ng);
+    src.start(now);
+    src.stop(now + 0.25);
+    const entry = registerVoice([body, src], [bg, ng]);
+    body.onended = () => forgetVoice(entry);
+}
+
+function playHiHat(open, v) {
+    const now = getScheduledTime(audioCtx.currentTime);
+    beginVoice();
+    const src = audioCtx.createBufferSource();
+    src.buffer = getNoiseBuffer(open ? 0.5 : 0.1);
+    const hp = audioCtx.createBiquadFilter();
+    hp.type = "highpass";
+    hp.frequency.value = 7500;
+    const gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(0.45 * v * masterVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + (open ? 0.4 : 0.07));
+    src.connect(hp);
+    hp.connect(gain);
+    connectToEffectsBus(gain);
+    src.start(now);
+    src.stop(now + (open ? 0.45 : 0.1));
+    const entry = registerVoice([src], [gain]);
+    src.onended = () => forgetVoice(entry);
+}
+
+function playClap(v) {
+    const now = getScheduledTime(audioCtx.currentTime);
+    beginVoice();
+    const src = audioCtx.createBufferSource();
+    src.buffer = getNoiseBuffer(0.3);
+    const bp = audioCtx.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.value = 1100;
+    bp.Q.value = 1.2;
+    const gain = audioCtx.createGain();
+    const g = 0.55 * v * masterVolume;
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(g, now + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
+    gain.gain.setValueAtTime(0, now + 0.03);
+    gain.gain.linearRampToValueAtTime(g * 0.85, now + 0.035);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+    gain.gain.setValueAtTime(0, now + 0.07);
+    gain.gain.linearRampToValueAtTime(g * 0.7, now + 0.075);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
+    src.connect(bp);
+    bp.connect(gain);
+    connectToEffectsBus(gain);
+    src.start(now);
+    src.stop(now + 0.32);
+    const entry = registerVoice([src], [gain]);
+    src.onended = () => forgetVoice(entry);
+}
+
+function playConga(v, high) {
+    const now = getScheduledTime(audioCtx.currentTime);
+    beginVoice();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "sine";
+    const f0 = high ? 380 : 240;
+    const f1 = high ? 180 : 105;
+    const dur = high ? 0.15 : 0.3;
+    osc.frequency.setValueAtTime(f0, now);
+    osc.frequency.exponentialRampToValueAtTime(f1, now + dur);
+    gain.gain.setValueAtTime(0.6 * v * masterVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    osc.connect(gain);
+    connectToEffectsBus(gain);
+    osc.start(now);
+    osc.stop(now + dur + 0.05);
+    const entry = registerVoice([osc], [gain]);
+    osc.onended = () => forgetVoice(entry);
+}
+
+function playClave(v) {
+    const now = getScheduledTime(audioCtx.currentTime);
+    beginVoice();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(2100, now);
+    gain.gain.setValueAtTime(0.4 * v * masterVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
+    osc.connect(gain);
+    connectToEffectsBus(gain);
+    osc.start(now);
+    osc.stop(now + 0.06);
+    const entry = registerVoice([osc], [gain]);
+    osc.onended = () => forgetVoice(entry);
+}
+
+function playHarpsichordNote(freq, v) {
+    const now = getScheduledTime(audioCtx.currentTime);
+    beginVoice();
+    const gain = audioCtx.createGain();
+    const harmonics = [1, 2, 3, 4, 5, 6, 8];
+    const amps = [1, 0.55, 0.42, 0.3, 0.2, 0.13, 0.07];
+    const vol = 0.3 * v * masterVolume;
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(vol, now + 0.003);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.85);
+    const oscs = [];
+    harmonics.forEach((h, i) => {
+        const o = audioCtx.createOscillator();
+        o.type = i === 0 ? "sine" : "triangle";
+        o.frequency.setValueAtTime(freq * h, now);
+        oscs.push(o);
+        o.connect(gain);
+    });
+    const click = audioCtx.createBufferSource();
+    click.buffer = getNoiseBuffer(0.03);
+    const cg = audioCtx.createGain();
+    const chp = audioCtx.createBiquadFilter();
+    chp.type = "highpass";
+    chp.frequency.value = 4500;
+    cg.gain.setValueAtTime(vol * 0.5, now);
+    cg.gain.exponentialRampToValueAtTime(0.0001, now + 0.02);
+    click.connect(chp);
+    chp.connect(cg);
+    cg.connect(gain);
+    connectToEffectsBus(gain);
+    oscs.forEach((o) => o.start(now));
+    oscs.forEach((o) => o.stop(now + 0.9));
+    click.start(now);
+    click.stop(now + 0.03);
+    const entry = registerVoice(oscs.concat(click), [gain]);
+    oscs[0].onended = () => forgetVoice(entry);
+}
+
+const INST_TYPES = ["inst_kick", "inst_snare", "inst_hihat_c", "inst_hihat_o", "inst_clap", "inst_conga", "inst_bongo", "inst_clave"];
+function isInstrumentType(type) {
+    return INST_TYPES.indexOf(type) !== -1;
+}
+
+function dispatchInstrumentSound(instKey, v) {
+    switch (instKey) {
+        case "inst_kick": playKick(v); break;
+        case "inst_snare": playSnare(v); break;
+        case "inst_hihat_c": playHiHat(false, v); break;
+        case "inst_hihat_o": playHiHat(true, v); break;
+        case "inst_clap": playClap(v); break;
+        case "inst_conga": playConga(v, false); break;
+        case "inst_bongo": playConga(v, true); break;
+        case "inst_clave": playClave(v); break;
+        default: break;
+    }
+}
+
+function playSequencerInstrument(instKey, velLevel) {
+    const v = AUDIO_VELOCITY[velLevel] !== undefined ? AUDIO_VELOCITY[velLevel] : AUDIO_VELOCITY[1];
+    dispatchInstrumentSound(instKey, v);
+}
+
+// Strumento colpito da sfere fisiche: l'intensità d'impatto (velocità relative
+// combinate con la massa) viene mappata con la stessa curva non lineare usata
+// per gli altri timbri, così più forte è l'urto più "spinge" la batteria.
+function playCollisionInstrument(instKey, impactIntensity) {
+    const IMPACT_MIN_VOL = 0.02;
+    const IMPACT_MAX_VOL = 0.95;
+    const IMPACT_REF = 8;
+    const normalizedImpact = Math.min(1, impactIntensity / IMPACT_REF);
+    const curvedImpact = Math.pow(normalizedImpact, 0.6);
+    const v = IMPACT_MIN_VOL + (IMPACT_MAX_VOL - IMPACT_MIN_VOL) * curvedImpact;
+    const instVol = (volumes[instKey] !== undefined ? volumes[instKey] : 0.8);
+    dispatchInstrumentSound(instKey, Math.min(1.4, v * 1.6 * instVol));
+}
+
+function playSequencerNote(noteType, velLevel) {
+    const freq = NOTE_FREQUENCIES[noteType];
+    if (!freq) return;
+    playHarpsichordNote(freq, AUDIO_VELOCITY[velLevel] !== undefined ? AUDIO_VELOCITY[velLevel] : AUDIO_VELOCITY[1]);
 }
 

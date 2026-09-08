@@ -233,6 +233,30 @@
             .block-btn#btn-note_si {
                 border-left: 3px solid #af52de;
             }
+            .block-btn#btn-inst_kick {
+                border-left: 3px solid #8b5cf6;
+            }
+            .block-btn#btn-inst_snare {
+                border-left: 3px solid #f1f2f6;
+            }
+            .block-btn#btn-inst_hihat_c {
+                border-left: 3px solid #fbc531;
+            }
+            .block-btn#btn-inst_hihat_o {
+                border-left: 3px solid #e1b12c;
+            }
+            .block-btn#btn-inst_clap {
+                border-left: 3px solid #e0a458;
+            }
+            .block-btn#btn-inst_conga {
+                border-left: 3px solid #b5533d;
+            }
+            .block-btn#btn-inst_bongo {
+                border-left: 3px solid #d97b54;
+            }
+            .block-btn#btn-inst_clave {
+                border-left: 3px solid #57606f;
+            }
             #top-center-controls {
                 position: absolute;
                 top: 10px;
@@ -319,13 +343,19 @@
                 display: flex;
                 flex-direction: column;
                 gap: 8px;
-                width: 260px;
+                width: 300px;
                 max-width: calc(100vw - 40px);
                 backdrop-filter: blur(8px);
                 z-index: 30;
                 transition:
                     left 0.12s ease-out,
                     top 0.12s ease-out;
+            }
+            #emitter-panel.dragging {
+                transition: none;
+                cursor: grabbing;
+                user-select: none;
+                opacity: 0.95;
             }
             .emitter-panel-header {
                 display: flex;
@@ -335,6 +365,13 @@
                 color: #f1c40f;
                 font-size: 13px;
                 margin-bottom: 4px;
+                cursor: grab;
+                padding: 4px 2px;
+                -webkit-user-select: none;
+                user-select: none;
+            }
+            .emitter-panel-header:active {
+                cursor: grabbing;
             }
             .pattern-steps {
                 display: flex;
@@ -378,6 +415,119 @@
             }
             .pattern-add-row button {
                 white-space: nowrap;
+            }
+
+            /* Drum machine / step sequencer timeline */
+            .drum-timeline {
+                display: grid;
+                grid-template-columns: repeat(8, 1fr);
+                gap: 4px;
+                margin: 4px 0 6px 0;
+                user-select: none;
+            }
+            .drum-step {
+                aspect-ratio: 1;
+                min-height: 28px;
+                border-radius: 6px;
+                border: 2px solid var(--border-color);
+                background: var(--btn-bg);
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 9px;
+                font-weight: 700;
+                color: var(--text-color);
+                transition: border-color 0.12s, background 0.12s, box-shadow 0.12s;
+                position: relative;
+                padding: 2px;
+                text-align: center;
+                line-height: 1.1;
+                overflow: hidden;
+            }
+            .drum-step:hover {
+                border-color: #888;
+            }
+            .drum-step.active {
+                border-color: #ff0055;
+                box-shadow: 0 0 8px rgba(255, 0, 85, 0.45);
+            }
+            .drum-step.filled {
+                background: #331122;
+                border-color: #ff0055;
+                color: #fff;
+            }
+            .drum-step .step-num {
+                position: absolute;
+                top: 1px;
+                left: 3px;
+                font-size: 8px;
+                opacity: 0.45;
+                font-weight: 600;
+            }
+            .drum-step .step-label {
+                font-size: 9px;
+                pointer-events: none;
+            }
+            .drum-step .step-velocity {
+                position: absolute;
+                bottom: 1px;
+                right: 2px;
+                font-size: 8px;
+                pointer-events: none;
+                opacity: 0.6;
+            }
+            .drum-step.flash {
+                animation: stepFlash 0.18s ease-out;
+            }
+            @keyframes stepFlash {
+                0% { background: rgba(241, 196, 15, 0.7); box-shadow: 0 0 12px rgba(241, 196, 15, 0.8); }
+                100% { background: var(--btn-bg); box-shadow: none; }
+            }
+            .drum-timeline.dragging { cursor: crosshair; }
+            .pattern-toolbar {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+                margin-top: 2px;
+            }
+            .pattern-toolbar .sub-btn {
+                flex: 1;
+                min-width: 0;
+                padding: 4px 6px;
+                font-size: 11px;
+            }
+            .pattern-bank-bar .sub-btn {
+                flex: 0 0 auto;
+                min-width: 26px;
+                padding: 3px 7px;
+                font-size: 11px;
+            }
+            .pattern-bank-bar .sub-btn.bank-btn-active {
+                border-color: #f1c40f;
+                background: #443311;
+                color: #f1c40f;
+                box-shadow: 0 0 6px #f1c40f66;
+            }
+            .chain-toggle-label {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                font-size: 10px;
+                opacity: 0.9;
+                cursor: pointer;
+                margin-left: 2px;
+                text-transform: none;
+            }
+            .pattern-hint {
+                text-transform: none !important;
+            }
+            #emitter-preset-select {
+                width: 100%;
+                background: var(--sub-btn-bg);
+                border: 1px solid #f1c40f55;
+                color: var(--text-color);
+                font-size: 11px;
             }
             .special-tools {
                 display: grid;

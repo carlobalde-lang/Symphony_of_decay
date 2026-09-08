@@ -29,6 +29,7 @@ const TRANSLATIONS = {
         "accordion-objects": "🧩 Spawnable Objects",
         "category-shapes": "🔷 Shapes",
         "category-notes": "🎵 Musical Notes",
+        "category-instruments": "🥁 Instruments",
         "category-special": "✨ Special",
         "category-connectors": "🔗 Rope / Chain / Bar",
         "accordion-physics": "🌍 Physics",
@@ -81,7 +82,16 @@ const TRANSLATIONS = {
         "obj-note_sol": "🔵 Note Sol (G)",
         "obj-note_la": "🟣 Note La (A)",
         "obj-note_si": "🟪 Note Si (B)",
-        "dynamic-limit-label": "⚙️ Adaptive Limit",
+        "obj-inst_kick": "🟣 Kick",
+        "obj-inst_snare": "⚪ Snare",
+        "obj-inst_hihat_c": "🟡 Hi-Hat Closed",
+        "obj-inst_hihat_o": "🟠 Hi-Hat Open",
+        "obj-inst_clap": "🟤 Clap",
+        "obj-inst_conga": "🟤 Conga",
+        "obj-inst_bongo": "🟠 Bongo",
+        "obj-inst_clave": "🩶 Clave",
+        "dynamic-limit-label": "☑️ Adaptive Performance Limit",
+        "dynamic-limit-hint": "Automatically lowers the object limit when performance drops, and raises it again when there's room.",
         "emitter-lifetime-label": "Lifetime (s)",
         "emitter-lifetime-infinite": "∞",
         "emitter-pause": "⏸️ Pause Emitter",
@@ -91,10 +101,16 @@ const TRANSLATIONS = {
         "global-clock-bpm-label": "Global Clock BPM",
         "global-clock-reset-btn": "↺ Reset Clock Phase",
         "global-clock-reset": "Clock phase reset",
-        "emitter-pattern-label": "🎵 Melodic Pattern",
+        "emitter-pattern-label": "🎵 Sequencer / Drum Machine",
         "emitter-pattern-add-btn": "+ Add",
-        "emitter-pattern-clear-btn": "🗑️ Clear Pattern",
-        "emitter-pattern-empty": "(empty — uses \"Fires\" above)"
+        "emitter-pattern-clear-btn": "🗑️ Clear",
+        "emitter-pattern-empty": "(empty — uses \"Fires\" above)",
+        "emitter-pattern-hint": "Click a step to place the selected instrument. Right-click to clear. Empty steps = rest.",
+        "emitter-paint-label": "Paint with:",
+        "emitter-vel-hint": "Click a filled step to cycle velocity (· soft ● mid ◉ loud). Drag across steps to paint multiple.",
+        "emitter-preset-placeholder": "— Preset pattern —",
+        "emitter-chain-label": "Chain",
+        "emitter-swing-label": "Swing"
     },
     it: {
         harmony: "Armonia",
@@ -124,6 +140,7 @@ const TRANSLATIONS = {
         "accordion-objects": "🧩 Oggetti Spawnabili",
         "category-shapes": "🔷 Forme",
         "category-notes": "🎵 Note Musicali",
+        "category-instruments": "🥁 Strumenti",
         "category-special": "✨ Speciali",
         "category-connectors": "🔗 Corda / Catena / Barra",
         "accordion-physics": "🌍 Fisica",
@@ -176,7 +193,16 @@ const TRANSLATIONS = {
         "obj-note_sol": "🔵 Nota Sol (G)",
         "obj-note_la": "🟣 Nota La (A)",
         "obj-note_si": "🟪 Nota Si (B)",
-        "dynamic-limit-label": "⚙️ Limite Adattivo",
+        "obj-inst_kick": "🟣 Kick",
+        "obj-inst_snare": "⚪ Rullante",
+        "obj-inst_hihat_c": "🟡 Hi-Hat Chiuso",
+        "obj-inst_hihat_o": "🟠 Hi-Hat Aperto",
+        "obj-inst_clap": "🟤 Battere le Mani",
+        "obj-inst_conga": "🟤 Conga",
+        "obj-inst_bongo": "🟠 Bongo",
+        "obj-inst_clave": "🩶 Claves",
+        "dynamic-limit-label": "☑️ Limite Prestazioni Adattivo",
+        "dynamic-limit-hint": "Abbassa automaticamente il limite oggetti quando le prestazioni calano, e lo rialza quando c'è margine.",
         "emitter-lifetime-label": "Durata (s)",
         "emitter-lifetime-infinite": "∞",
         "emitter-pause": "⏸️ Pausa Emettitore",
@@ -186,10 +212,16 @@ const TRANSLATIONS = {
         "global-clock-bpm-label": "BPM Clock Globale",
         "global-clock-reset-btn": "↺ Reset Fase Clock",
         "global-clock-reset": "Fase del clock azzerata",
-        "emitter-pattern-label": "🎵 Pattern Melodico",
+        "emitter-pattern-label": "🎵 Sequencer / Drum Machine",
         "emitter-pattern-add-btn": "+ Aggiungi",
-        "emitter-pattern-clear-btn": "🗑️ Cancella Pattern",
-        "emitter-pattern-empty": "(vuoto — usa \"Spara\" sopra)"
+        "emitter-pattern-clear-btn": "🗑️ Cancella",
+        "emitter-pattern-empty": "(vuoto — usa \"Spara\" sopra)",
+        "emitter-pattern-hint": "Clicca uno step per piazzare lo strumento selezionato. Click destro per cancellare. Step vuoti = pausa.",
+        "emitter-paint-label": "Disegna con:",
+        "emitter-vel-hint": "Clicca uno step pieno per ciclare la velocità (· soft ● medio ◉ forte). Trascina tra gli step per dipingerne più di uno.",
+        "emitter-preset-placeholder": "— Pattern preimpostato —",
+        "emitter-chain-label": "Catena",
+        "emitter-swing-label": "Swing"
     }
 };
 
@@ -208,6 +240,12 @@ function updateUILanguage() {
         const key = el.getAttribute("data-i18n");
         if (key) {
             el.textContent = t(key);
+        }
+    });
+    document.querySelectorAll("[data-i18n-title]").forEach((el) => {
+        const key = el.getAttribute("data-i18n-title");
+        if (key) {
+            el.title = t(key);
         }
     });
     updateInstructionText();

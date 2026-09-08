@@ -29,11 +29,26 @@
                 <span id="body-count-max">150</span>
             </div>
             <div id="dynamic-limit-box" style="pointer-events: auto; margin-top: 4px; display: flex; align-items: center; gap: 6px">
-                <input type="checkbox" id="chk-dynamic-limit" checked onchange="setDynamicLimitEnabled(this.checked)" />
-                <label for="chk-dynamic-limit" style="font-size: 11px; margin: 0; cursor: pointer" data-i18n="dynamic-limit-label"
-                    >⚙️ Adaptive Limit</label
+                <input
+                    type="checkbox"
+                    id="chk-dynamic-limit"
+                    checked
+                    onchange="setDynamicLimitEnabled(this.checked)"
+                    data-i18n-title="dynamic-limit-hint" />
+                <label
+                    for="chk-dynamic-limit"
+                    style="font-size: 11px; margin: 0; cursor: pointer"
+                    data-i18n="dynamic-limit-label"
+                    data-i18n-title="dynamic-limit-hint"
+                    >☑️ Adaptive Performance Limit</label
                 >
             </div>
+            <p
+                id="dynamic-limit-hint"
+                data-i18n="dynamic-limit-hint"
+                style="pointer-events: none; font-size: 10px; opacity: 0.65; font-style: italic; margin: 2px 0 0 0">
+                Automatically lowers the object limit when performance drops, and raises it again when there's room.
+            </p>
         </div>
 
         <div id="toolbox" class="collapsed">
@@ -75,6 +90,21 @@
                                 <button class="block-btn note-btn" id="btn-note_sol" onclick="selectBlock('note_sol')">🔵 Sol</button>
                                 <button class="block-btn note-btn" id="btn-note_la" onclick="selectBlock('note_la')">🟣 La</button>
                                 <button class="block-btn note-btn" id="btn-note_si" onclick="selectBlock('note_si')">🟪 Si</button>
+                            </div>
+                        </div>
+                    </details>
+                    <details class="accordion sub-accordion">
+                        <summary data-i18n="category-instruments">🥁 Instruments</summary>
+                        <div class="accordion-body">
+                            <div class="block-selector">
+                                <button class="block-btn" id="btn-inst_kick" onclick="selectBlock('inst_kick')">🟣 Kick</button>
+                                <button class="block-btn" id="btn-inst_snare" onclick="selectBlock('inst_snare')">⚪ Snare</button>
+                                <button class="block-btn" id="btn-inst_hihat_c" onclick="selectBlock('inst_hihat_c')">🟡 Hi-Hat C</button>
+                                <button class="block-btn" id="btn-inst_hihat_o" onclick="selectBlock('inst_hihat_o')">🟠 Hi-Hat O</button>
+                                <button class="block-btn" id="btn-inst_clap" onclick="selectBlock('inst_clap')">🟤 Clap</button>
+                                <button class="block-btn" id="btn-inst_conga" onclick="selectBlock('inst_conga')">🟤 Conga</button>
+                                <button class="block-btn" id="btn-inst_bongo" onclick="selectBlock('inst_bongo')">🟠 Bongo</button>
+                                <button class="block-btn" id="btn-inst_clave" onclick="selectBlock('inst_clave')">🩶 Clave</button>
                             </div>
                         </div>
                     </details>
@@ -389,6 +419,86 @@
                                     value="0.8"
                                     oninput="updateVolume('note_si', this.value)" />
                             </div>
+                            <div class="mixer-item">
+                                <label data-i18n="obj-inst_kick">🟣 Kick</label><input
+                                    type="range"
+                                    id="vol-inst_kick"
+                                    min="0"
+                                    max="1"
+                                    step="0.1"
+                                    value="0.8"
+                                    oninput="updateVolume('inst_kick', this.value)" />
+                            </div>
+                            <div class="mixer-item">
+                                <label data-i18n="obj-inst_snare">⚪ Snare</label><input
+                                    type="range"
+                                    id="vol-inst_snare"
+                                    min="0"
+                                    max="1"
+                                    step="0.1"
+                                    value="0.8"
+                                    oninput="updateVolume('inst_snare', this.value)" />
+                            </div>
+                            <div class="mixer-item">
+                                <label data-i18n="obj-inst_hihat_c">🟡 Hi-Hat C</label><input
+                                    type="range"
+                                    id="vol-inst_hihat_c"
+                                    min="0"
+                                    max="1"
+                                    step="0.1"
+                                    value="0.8"
+                                    oninput="updateVolume('inst_hihat_c', this.value)" />
+                            </div>
+                            <div class="mixer-item">
+                                <label data-i18n="obj-inst_hihat_o">🟠 Hi-Hat O</label><input
+                                    type="range"
+                                    id="vol-inst_hihat_o"
+                                    min="0"
+                                    max="1"
+                                    step="0.1"
+                                    value="0.8"
+                                    oninput="updateVolume('inst_hihat_o', this.value)" />
+                            </div>
+                            <div class="mixer-item">
+                                <label data-i18n="obj-inst_clap">🟤 Clap</label><input
+                                    type="range"
+                                    id="vol-inst_clap"
+                                    min="0"
+                                    max="1"
+                                    step="0.1"
+                                    value="0.8"
+                                    oninput="updateVolume('inst_clap', this.value)" />
+                            </div>
+                            <div class="mixer-item">
+                                <label data-i18n="obj-inst_conga">🟤 Conga</label><input
+                                    type="range"
+                                    id="vol-inst_conga"
+                                    min="0"
+                                    max="1"
+                                    step="0.1"
+                                    value="0.8"
+                                    oninput="updateVolume('inst_conga', this.value)" />
+                            </div>
+                            <div class="mixer-item">
+                                <label data-i18n="obj-inst_bongo">🟠 Bongo</label><input
+                                    type="range"
+                                    id="vol-inst_bongo"
+                                    min="0"
+                                    max="1"
+                                    step="0.1"
+                                    value="0.8"
+                                    oninput="updateVolume('inst_bongo', this.value)" />
+                            </div>
+                            <div class="mixer-item">
+                                <label data-i18n="obj-inst_clave">🩶 Clave</label><input
+                                    type="range"
+                                    id="vol-inst_clave"
+                                    min="0"
+                                    max="1"
+                                    step="0.1"
+                                    value="0.8"
+                                    oninput="updateVolume('inst_clave', this.value)" />
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -468,13 +578,53 @@
                 <select id="emitter-object-select" class="scene-select" onchange="setEmitterObjectType(this.value)"></select>
             </div>
             <div class="tool-group">
-                <label data-i18n="emitter-pattern-label">🎵 Melodic Pattern</label>
-                <div id="emitter-pattern-steps" class="pattern-steps"></div>
-                <div class="pattern-add-row">
+                <label data-i18n="emitter-pattern-label">🎵 Sequencer / Drum Machine</label>
+                <p class="pattern-hint" data-i18n="emitter-pattern-hint" style="font-size: 10px; opacity: 0.7; margin: 0 0 6px 0; font-style: italic; text-transform: none;">
+                    Click a step to place the selected instrument. Right-click to clear. Empty steps = rest.
+                </p>
+                <div class="tool-group" style="margin-bottom: 6px">
+                    <label data-i18n="emitter-paint-label" style="margin-bottom: 3px">Paint with:</label>
                     <select id="emitter-pattern-add-select" class="scene-select" style="margin-bottom: 0"></select>
-                    <button class="sub-btn" onclick="addPatternStep()" data-i18n="emitter-pattern-add-btn">+ Add</button>
                 </div>
-                <button class="sub-btn" onclick="clearEmitterPattern()" data-i18n="emitter-pattern-clear-btn">🗑️ Clear Pattern</button>
+                <div class="tool-group" style="margin-bottom: 6px">
+                    <select id="emitter-preset-select" class="scene-select" style="margin-bottom: 0" onchange="applyPatternPreset(this.value); this.value='';">
+                        <option value="" data-i18n="emitter-preset-placeholder">— Preset pattern —</option>
+                        <option value="four-on-floor">Four on the Floor</option>
+                        <option value="hihat-8th">Hi-Hat 8th</option>
+                        <option value="hihat-16th">Hi-Hat 16th</option>
+                        <option value="kick-snare">Kick + Snare</option>
+                        <option value="breakbeat">Breakbeat</option>
+                        <option value="clave-3-2">Clave 3-2</option>
+                        <option value="clave-2-3">Clave 2-3</option>
+                        <option value="dembow">Dembow</option>
+                        <option value="reggae-skank">Reggae Skank</option>
+                        <option value="half-time">Half-Time</option>
+                        <option value="afro-latin">Afro Latin</option>
+                        <option value="melody-asc">Melody Ascending</option>
+                        <option value="arpeggio-16">Arpeggio 16</option>
+                        <option value="random-16">Random 16</option>
+                    </select>
+                </div>
+                <div id="emitter-pattern-steps" class="drum-timeline"></div>
+                <p class="vel-hint" data-i18n="emitter-vel-hint" style="font-size: 9px; opacity: 0.5; margin: 0 0 4px 0; font-style: italic; text-transform: none;">
+                    Click filled step to cycle velocity (· soft ● mid ◉ loud). Drag to paint multiple.
+                </p>
+                <div class="pattern-toolbar">
+                    <button class="sub-btn" onclick="clearEmitterPattern()" data-i18n="emitter-pattern-clear-btn">🗑️ Clear</button>
+                    <button class="sub-btn" onclick="setPatternLength(8)" title="8 steps">8</button>
+                    <button class="sub-btn" onclick="setPatternLength(16)" title="16 steps">16</button>
+                    <button class="sub-btn" onclick="setPatternLength(32)" title="32 steps">32</button>
+                    <button class="sub-btn" onclick="shiftPattern(-1)" title="Shift left">◀</button>
+                    <button class="sub-btn" onclick="shiftPattern(1)" title="Shift right">▶</button>
+                </div>
+                <div class="pattern-toolbar" style="margin-top: 2px">
+                    <button class="sub-btn" onclick="copyEmitterPattern()" title="Copy pattern">📋 Copy</button>
+                    <button class="sub-btn" onclick="pasteEmitterPattern()" title="Paste pattern">📋 Paste</button>
+                </div>
+                <div class="pattern-bank-bar" id="emitter-bank-bar" style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap; margin-top: 4px"></div>
+                <p class="pattern-empty-hint" id="emitter-pattern-empty-hint" data-i18n="emitter-pattern-empty" style="display:none; font-size: 10px; opacity: 0.6; font-style: italic; margin: 4px 0 0 0;">
+                    (empty — uses "Fires" above)
+                </p>
             </div>
             <div class="tool-group">
                 <label
@@ -503,6 +653,20 @@
                     step="1"
                     value="90"
                     oninput="setEmitterBpm(this.value)" />
+            </div>
+            <div class="tool-group">
+                <label
+                    ><span data-i18n="emitter-swing-label">Swing</span>:
+                    <span id="val-emitter-swing" class="slider-val">0</span>%</label
+                >
+                <input
+                    type="range"
+                    id="slider-emitter-swing"
+                    min="0"
+                    max="80"
+                    step="1"
+                    value="0"
+                    oninput="setEmitterSwing(this.value)" />
             </div>
             <div class="tool-group emitter-sync-group">
                 <label style="flex-direction: row; align-items: center; gap: 6px; justify-content: flex-start">
