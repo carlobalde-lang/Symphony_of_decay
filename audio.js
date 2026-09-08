@@ -476,6 +476,8 @@ function playMixedSound(typeA, typeB, velocity) {
 
         voiceEntry.oscillators.push(osc2);
         voiceEntry.gains.push(gain2);
+
+        if (primaryType !== secondaryType) addHarmonyScore(freq1, freq2, vol1);
     }
 
     addScore(vol1);
@@ -736,4 +738,177 @@ function playSequencerNote(noteType, velLevel) {
     if (!freq) return;
     playHarpsichordNote(freq, AUDIO_VELOCITY[velLevel] !== undefined ? AUDIO_VELOCITY[velLevel] : AUDIO_VELOCITY[1]);
 }
+
+// --- Bonus armonico ---
+// Quando due note diverse suonano insieme, l'intervallo tra le loro frequenze
+// viene confrontato con gli intervalli della scala corrente. Più l'intervallo è
+// consonante (unisono/ottava, quinta, quarta, terze, sesta) più cresce il punteggio.
+const CONSONANT_INTERVALS = { 0: 1.6, 3: 1.2, 4: 1.2, 5: 1.5, 7: 2.0, 9: 1.2, 12: 1.6 };
+let lastHarmonyNote = null;
+
+function addHarmonyScore(freqA, freqB, velocity) {
+    if (!freqA || !freqB) return;
+    const low = Math.min(freqA, freqB);
+    const high = Math.max(freqA, freqB);
+    const semitones = Math.round(12 * Math.log2(high / low)) % 12;
+    const multiplier = CONSONANT_INTERVALS[semitones];
+    if (multiplier !== undefined) {
+        addScore(velocity * multiplier * 1.2);
+    }
+}
+
+// --- Registrazione sessione in WAV ---
+// Tap sul master bus con uno ScriptProcessor: campiona i frame senza risuonarli.
+let _recNode = null;
+let _recLeft = null;
+let _recRight = null;
+let _recLength = 0;
+let _recording = false;
+
+function _encodeWav(left, right, sampleRate) {
+    const numFrames = left.length;
+    const numChannels = right ? 2 : 1;
+    const dataSize = numFrames * numChannels * 2;
+    const buffer = new ArrayBuffer(44 + dataSize);
+    const view = new DataView(buffer);
+
+    const writeStr = (offset, str) => {
+        for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+    };
+
+    writeStr(0, "RIFF");
+    view.setUint32(4, 36 + dataSize, true);
+    writeStr(8, "WAVE");
+    writeStr(12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true); // PCM
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * numChannels * 2, true);
+    view.setUint16(32, numChannels * 2, true);
+    view.setUint16(34, 16, true);
+    writeStr(36, "data");
+    view.setUint32(40, dataSize, true);
+
+    let offset = 44;
+    for (let i = 0; i < numFrames; i++) {
+        let s1 = Math.max(-1, Math.min(1, left[i]));
+        view.setInt16(offset, s1 < 0 ? s1 * 0x8000 : s1 * 0x7fff, true);
+        offset += 2;
+        if (right) {
+            let s2 = Math.max(-1, Math.min(1, right[i]));
+            view.setInt16(offset, s2 < 0 ? s2 * 0x8000 : s2 * 0x7fff, true);
+            offset += 2;
+        }
+    }
+    return new Blob([buffer], { type: "audio/wav" });
+}
+
+function toggleRecording() {
+    if (_recording) stopRecording();
+    else startRecording();
+}
+
+function startRecording() {
+    if (_recording) return;
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    _recLeft = [];
+    _recRight = [];
+    _recLength = 0;
+    _recNode = audioCtx.createScriptProcessor(4096, 2, 2);
+    _recNode.onaudioprocess = (e) => {
+        if (!_recording) return;
+        const inL = e.inputBuffer.getChannelData(0);
+        const inR = e.inputBuffer.getChannelData(1);
+        _recLeft.push(new Float32Array(inL));
+        _recRight.push(new Float32Array(inR));
+        _recLength += inL.length;
+    };
+    masterBus.connect(_recNode);
+    _recording = true;
+    const btn = document.getElementById("btn-record");
+    if (btn) btn.textContent = t("record-stop");
+    flashMessage(t("record-message-start"), "#ff4757");
+}
+
+function stopRecording() {
+    if (!_recording || !_recNode) return;
+    _recording = false;
+    try { masterBus.disconnect(_recNode); } catch (e) {}
+    _recNode.onaudioprocess = null;
+    _recNode = null;
+
+    const sampleRate = audioCtx.sampleRate;
+    const left = new Float32Array(_recLength);
+    const right = new Float32Array(_recLength);
+    let pos = 0;
+    for (let i = 0; i < _recLeft.length; i++) {
+        left.set(_recLeft[i], pos);
+        right.set(_recRight[i], pos);
+        pos += _recLeft[i].length;
+    }
+    _recLeft = [];
+    _recRight = [];
+    _recLength = 0;
+
+    const blob = _encodeWav(left, right, sampleRate);
+    const a = document.createElement("a");
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    a.href = URL.createObjectURL(blob);
+    a.download = "symphony-recording-" + ts + ".wav";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+        URL.revokeObjectURL(a.href);
+        a.remove();
+    }, 1000);
+    const btn = document.getElementById("btn-record");
+    if (btn) btn.textContent = t("record-start");
+    flashMessage(t("record-message-stop"), "#00d2ff");
+}
+
+// --- Visualizer: spettro di frequenza dal master bus (dopo il limitatore) ---
+// Tap sull'uscita del compressore: col segnale già limitato le barre non saturano
+// a fondo scala e lo spettro resta dinamico.
+const _vizAnalyser = audioCtx.createAnalyser();
+_vizAnalyser.fftSize = 1024;
+_vizAnalyser.smoothingTimeConstant = 0.82;
+masterCompressor.connect(_vizAnalyser);
+const _vizFrequencyData = new Uint8Array(_vizAnalyser.frequencyBinCount);
+
+function _drawVisualizer() {
+    const canvas = document.getElementById("viz-canvas");
+    if (canvas) {
+        const ctx2 = canvas.getContext("2d");
+        _vizAnalyser.getByteFrequencyData(_vizFrequencyData);
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx2.clearRect(0, 0, w, h);
+        const binCount = _vizFrequencyData.length;
+        const nyquist = audioCtx.sampleRate / 2;
+        const fMin = 40;
+        const fMax = 14000; // banda musicale reale; sopra resta silenzio
+        const f0 = Math.log2(fMin);
+        const f1 = Math.log2(fMax);
+        const barCount = Math.max(1, Math.floor(w / 3));
+        const barW = w / barCount;
+        const accent = typeof getCssVar === "function" ? getCssVar("--accent", "#ff0055") : "#ff0055";
+        ctx2.fillStyle = accent;
+        for (let i = 0; i < barCount; i++) {
+            // Frequenza su scala logaritmica; mappa l'energia bassa su tutta la larghezza.
+            const freq = Math.pow(2, f0 + (i / barCount) * (f1 - f0));
+            const bin = Math.min(binCount - 1, Math.max(0, Math.floor((freq / nyquist) * binCount)));
+            let v = _vizFrequencyData[bin] / 255;
+            // Compensa il rolloff naturale dei timbri sintetizzati: le ali alte
+            // vengono rialzate un po' per riempire anche la parte destra.
+            v = Math.min(1, v * 1.6 + (i / barCount) * 0.18);
+            const bh = Math.max(1, v * h);
+            ctx2.globalAlpha = 0.35 + v * 0.65;
+            ctx2.fillRect(i * barW, h - bh, Math.max(1, barW - 1), bh);
+        }
+        ctx2.globalAlpha = 1;
+    }
+    requestAnimationFrame(_drawVisualizer);
+}
+_drawVisualizer();
 

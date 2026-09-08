@@ -38,7 +38,9 @@ function serializeScene() {
             angle: b.getAngle(),
             soundType: b.soundType || null,
             renderColor: b.renderColor || null,
+            baseColor: b.baseColor || null,
             ropeId: b.ropeId || null,
+            isAnchor: b.isAnchor || false,
             wallHalfW: b.wallHalfW || null,
             wallHalfH: b.wallHalfH || null,
             isEmitter: b.isEmitter || false,
@@ -84,6 +86,7 @@ function serializeScene() {
             isRopeDistanceJoint: !!j.isRopeDistanceJoint,
             isCustomRender: !!j.isCustomRender,
             renderColor: j.renderColor || null,
+            baseColor: j.baseColor || null,
             renderWidth: j.renderWidth || null
         };
         if (type === "distance-joint") {
@@ -104,6 +107,7 @@ function serializeScene() {
             turbulence: document.getElementById("slider-turbulence").value
         },
         globalClockBpm,
+        boundary: boundaryInnerRect(),
         bodies,
         joints
     };
@@ -130,8 +134,14 @@ function createBodyFromSerialized(bd) {
 
     body.setLinearDamping(bd.linearDamping);
     if (bd.soundType) body.soundType = bd.soundType;
-    if (bd.renderColor) body.renderColor = bd.renderColor;
+    if (bd.baseColor) {
+        body.baseColor = bd.baseColor;
+        body.renderColor = shiftHueColor(bd.baseColor);
+    } else if (bd.renderColor) {
+        body.renderColor = bd.renderColor;
+    }
     if (bd.ropeId) body.ropeId = bd.ropeId;
+    if (bd.isAnchor) body.isAnchor = true;
     if (bd.wallHalfW) {
         body.wallHalfW = bd.wallHalfW;
         body.wallHalfH = bd.wallHalfH;
@@ -207,7 +217,12 @@ function createJointFromSerialized(jd, bodyA, bodyB, ropeMap) {
     if (jd.ropeId) joint.ropeId = (ropeMap && ropeMap.get(jd.ropeId)) || jd.ropeId;
     if (jd.isRopeDistanceJoint) joint.isRopeDistanceJoint = true;
     if (jd.isCustomRender) joint.isCustomRender = true;
-    if (jd.renderColor) joint.renderColor = jd.renderColor;
+    if (jd.baseColor) {
+        joint.baseColor = jd.baseColor;
+        joint.renderColor = shiftHueColor(jd.baseColor);
+    } else if (jd.renderColor) {
+        joint.renderColor = jd.renderColor;
+    }
     if (jd.renderWidth) joint.renderWidth = jd.renderWidth;
     return joint;
 }
@@ -217,6 +232,10 @@ function deserializeScene(data) {
 
     if (!data || data.version !== 1 || !Array.isArray(data.bodies) || !Array.isArray(data.joints)) {
         throw new Error("Formato scena incompatibile");
+    }
+
+    if (data.boundary) {
+        applyBoundaryRect(data.boundary);
     }
 
     if (data.globalClockBpm) {
@@ -241,7 +260,12 @@ function deserializeScene(data) {
         if (jd.ropeId) joint.ropeId = jd.ropeId;
         if (jd.isRopeDistanceJoint) joint.isRopeDistanceJoint = true;
         if (jd.isCustomRender) joint.isCustomRender = true;
-        if (jd.renderColor) joint.renderColor = jd.renderColor;
+        if (jd.baseColor) {
+            joint.baseColor = jd.baseColor;
+            joint.renderColor = shiftHueColor(jd.baseColor);
+        } else if (jd.renderColor) {
+            joint.renderColor = jd.renderColor;
+        }
         if (jd.renderWidth) joint.renderWidth = jd.renderWidth;
     });
 
@@ -410,5 +434,41 @@ function deleteScene() {
     localStorage.setItem(SAVE_KEY, JSON.stringify(scenes));
     refreshSceneList();
     flashMessage(`🗑️ "${name}" deleted`, "#ffa502");
+}
+
+// --- Autosave: ripristina l'ultima sessione al riavvio ---
+const AUTOSAVE_KEY = "symphonyOfDecay_autosave";
+
+function autosaveNow() {
+    try {
+        const data = serializeScene();
+        localStorage.setItem(AUTOSAVE_KEY, JSON.stringify({ savedAt: Date.now(), data }));
+    } catch (e) {}
+}
+
+function getAutosave() {
+    try {
+        const raw = localStorage.getItem(AUTOSAVE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return parsed.data && Array.isArray(parsed.data.bodies) ? parsed.data : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function autosaveStartInterval() {
+    setInterval(autosaveNow, 30000);
+}
+
+function restoreLastSessionIfAny() {
+    const data = getAutosave();
+    if (!data) return;
+    try {
+        deserializeScene(data);
+        flashMessage("🔄 Last session restored", "#2ed573");
+    } catch (e) {
+        flashMessage("⚠️ Could not restore last session", "#ffa502");
+    }
 }
 

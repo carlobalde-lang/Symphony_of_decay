@@ -3,13 +3,101 @@
 let _rafId = null;
 let trailEnabled = false;
 
+let _cssVarCache = null;
+let _cssVarCacheKey = null;
+
+function getCssVar(name, fallback) {
+    const key = document.body.className || "default";
+    if (!_cssVarCache || _cssVarCacheKey !== key) {
+        _cssVarCache = getComputedStyle(document.body);
+        _cssVarCacheKey = key;
+    }
+    return _cssVarCache.getPropertyValue(name).trim() || fallback;
+}
+
 function setTrailEnabled(enabled) {
     trailEnabled = enabled;
 }
 
+// --- Snap-to-grid + griglia traslucida ---
+let snapGridEnabled = false;
+const GRID_CELL = 0.5; // metri
+
+function setSnapGridEnabled(enabled) {
+    snapGridEnabled = enabled;
+    const btn = document.getElementById("btn-snap-grid");
+    if (btn) btn.classList.toggle("active", enabled);
+}
+
+function toggleSnapGrid() {
+    setSnapGridEnabled(!snapGridEnabled);
+}
+
+function applySnapToGrid(x, y) {
+    if (!snapGridEnabled || GRID_CELL <= 0) return { x, y };
+    return {
+        x: Math.round(x / GRID_CELL) * GRID_CELL,
+        y: Math.round(y / GRID_CELL) * GRID_CELL
+    };
+}
+
+function drawGrid() {
+    if (!snapGridEnabled) return;
+    const leftWorld = screenToWorldX(0);
+    const topWorld = screenToWorldY(0);
+    const rightWorld = screenToWorldX(logicalWidth);
+    const bottomWorld = screenToWorldY(logicalHeight);
+
+    ctx.save();
+    ctx.strokeStyle = getCssVar("--accent", "#ff0055") + "22";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = Math.floor(leftWorld / GRID_CELL) * GRID_CELL; x <= rightWorld; x += GRID_CELL) {
+        ctx.moveTo(x * SCALE, topWorld * SCALE);
+        ctx.lineTo(x * SCALE, bottomWorld * SCALE);
+    }
+    for (let y = Math.floor(topWorld / GRID_CELL) * GRID_CELL; y <= bottomWorld; y += GRID_CELL) {
+        ctx.moveTo(leftWorld * SCALE, y * SCALE);
+        ctx.lineTo(rightWorld * SCALE, y * SCALE);
+    }
+    ctx.stroke();
+    ctx.restore();
+}
+
+// --- Bloom / glow simulato su corpi luminosi ---
+let bloomEnabled = false;
+
+function setBloomEnabled(enabled) {
+    bloomEnabled = enabled;
+}
+
+// --- Screenshot PNG che combina sfondo + scena ---
+function screenshotCanvas() {
+    try {
+        const g = document.getElementById("game-canvas");
+        const bg = document.getElementById("bg-canvas");
+        const out = document.createElement("canvas");
+        out.width = g.width;
+        out.height = g.height;
+        const octx = out.getContext("2d");
+        if (bg) octx.drawImage(bg, 0, 0);
+        octx.drawImage(g, 0, 0);
+        const a = document.createElement("a");
+        const ts = new Date().toISOString().replace(/[:.]/g, "-");
+        a.download = "symphony-screenshot-" + ts + ".png";
+        a.href = out.toDataURL("image/png");
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        flashMessage("📸 Screenshot saved (PNG)", "#2ed573");
+    } catch (e) {
+        flashMessage("⚠️ Screenshot failed", "#ff4757");
+    }
+}
+
 function drawSelectionOverlay() {
     const isLight = document.body.classList.contains("light-theme");
-    const highlight = isLight ? "#0066ff" : "#4dc3ff";
+    const highlight = getCssVar("--accent", isLight ? "#0066ff" : "#4dc3ff");
     for (const b of selectedBodies) {
         const bounds = getBodyWorldBounds(b);
         if (!bounds) continue;
@@ -64,7 +152,7 @@ function gameLoop() {
 
     drawJapaneseBackground();
     const isLight = document.body.classList.contains("light-theme");
-    const wallColor = isLight ? "#d1d5db" : "#1a1a2e";
+    const wallColor = getCssVar("--wall-color", isLight ? "#d1d5db" : "#1a1a2e");
 
     if (trailEnabled) {
         ctx.fillStyle = isLight ? "rgba(255, 255, 255, 0.16)" : "rgba(8, 8, 16, 0.18)";
@@ -72,6 +160,16 @@ function gameLoop() {
     } else {
         ctx.clearRect(0, 0, logicalWidth, logicalHeight);
     }
+
+    // Camera: tutto il disegno mondo è in coords "mondo * SCALE"; la trasform
+    // applica zoom+pan senza toccare il codice di rendering sottostante.
+    const _emitterBadges = [];
+    ctx.save();
+    ctx.translate(camOffsetX, camOffsetY);
+    ctx.scale(camZoom, camZoom);
+
+    const accentColor = getCssVar("--accent", "#ff0055");
+    const halfAccent = getCssVar("--accent-glow", "rgba(255, 0, 85, 0.2)");
 
     for (let b = world.getBodyList(); b; b = b.getNext()) {
         const pos = b.getPosition();
@@ -83,9 +181,14 @@ function gameLoop() {
 
         for (let f = b.getFixtureList(); f; f = f.getNext()) {
             const shape = f.getType();
-            ctx.fillStyle = b.isWall ? wallColor : b.renderColor || "#fff";
+            const bodyColor = b.isWall ? wallColor : b.renderColor || "#fff";
+            ctx.fillStyle = bodyColor;
             ctx.strokeStyle = "#000";
             ctx.lineWidth = 1.5;
+            if (bloomEnabled) {
+                ctx.shadowColor = bodyColor;
+                ctx.shadowBlur = 14;
+            }
 
             if (shape === "circle") {
                 const radius = f.getShape().m_radius;
@@ -114,7 +217,7 @@ function gameLoop() {
             const baseR = b.getWorldPoint(planck.Vec2(8 / SCALE, -(b.emitterHalfH - 2 / SCALE)));
             ctx.save();
             ctx.globalAlpha = b.emitterPaused ? 0.3 : 1.0;
-            ctx.fillStyle = "#ff0055";
+            ctx.fillStyle = accentColor;
             ctx.beginPath();
             ctx.moveTo(tip.x * SCALE, tip.y * SCALE);
             ctx.lineTo(baseL.x * SCALE, baseL.y * SCALE);
@@ -126,29 +229,7 @@ function gameLoop() {
             // Pulsante pausa/play cliccabile, sempre visibile sull'angolo dell'emettitore
             const badgeLocal = planck.Vec2(-b.emitterHalfW + EMITTER_BADGE_LOCAL_OFFSET, -b.emitterHalfH + EMITTER_BADGE_LOCAL_OFFSET);
             const badgeWorld = b.getWorldPoint(badgeLocal);
-            const bx = badgeWorld.x * SCALE;
-            const by = badgeWorld.y * SCALE;
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(bx, by, EMITTER_BADGE_RADIUS, 0, Math.PI * 2);
-            ctx.fillStyle = b.emitterPaused ? "#2ed573" : "#1a1a2e";
-            ctx.fill();
-            ctx.strokeStyle = "#ffffff";
-            ctx.lineWidth = 1.2;
-            ctx.stroke();
-            ctx.fillStyle = "#ffffff";
-            if (b.emitterPaused) {
-                ctx.beginPath();
-                ctx.moveTo(bx - 3, by - 4);
-                ctx.lineTo(bx - 3, by + 4);
-                ctx.lineTo(bx + 4, by);
-                ctx.closePath();
-                ctx.fill();
-            } else {
-                ctx.fillRect(bx - 3.5, by - 4, 2.4, 8);
-                ctx.fillRect(bx + 1.1, by - 4, 2.4, 8);
-            }
-            ctx.restore();
+            _emitterBadges.push({ x: worldToScreenX(badgeWorld.x), y: worldToScreenY(badgeWorld.y), paused: b.emitterPaused });
         }
     }
 
@@ -172,17 +253,35 @@ function gameLoop() {
     }
 
     drawSelectionOverlay();
+    drawGrid();
 
     if (linkStartBody && (currentMode === "rope" || currentMode === "chain" || currentMode === "bar")) {
         const startWorldPoint = linkStartBody.getWorldPoint(linkStartPoint);
         ctx.save();
         ctx.beginPath();
         ctx.arc(startWorldPoint.x * SCALE, startWorldPoint.y * SCALE, 8, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(255, 0, 85, 0.4)";
+        ctx.fillStyle = halfAccent;
         ctx.fill();
         ctx.lineWidth = 2;
-        ctx.strokeStyle = "#ff0055";
+        ctx.strokeStyle = accentColor;
         ctx.stroke();
+        ctx.restore();
+    }
+
+    if (linkDragStart && (currentMode === "rope" || currentMode === "chain" || currentMode === "bar")) {
+        ctx.save();
+        ctx.strokeStyle = accentColor;
+        ctx.setLineDash([6, 6]);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(linkDragStart.startWorld.x * SCALE, linkDragStart.startWorld.y * SCALE);
+        ctx.lineTo(_lastPointerWorld.x * SCALE, _lastPointerWorld.y * SCALE);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = halfAccent;
+        ctx.beginPath();
+        ctx.arc(linkDragStart.startWorld.x * SCALE, linkDragStart.startWorld.y * SCALE, 6, 0, Math.PI * 2);
+        ctx.fill();
         ctx.restore();
     }
 
@@ -204,7 +303,7 @@ function gameLoop() {
                 ctx.save();
                 ctx.translate(a.x, a.y);
                 ctx.rotate(a.angle);
-                ctx.fillStyle = "#ff0055";
+                ctx.fillStyle = accentColor;
                 ctx.beginPath();
                 ctx.moveTo(8, 0);
                 ctx.lineTo(-6, -7);
@@ -241,6 +340,37 @@ function gameLoop() {
         ctx.restore();
     }
 
+    ctx.restore();
+
+    // Badge pausa/play degli emettitori: disegnati in coordinate schermo (fuori
+    // dalla transform della camera) così mantengono dimensione costante col zoom.
+    for (const badge of _emitterBadges) {
+        const bx = badge.x;
+        const by = badge.y;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(bx, by, EMITTER_BADGE_RADIUS, 0, Math.PI * 2);
+        ctx.fillStyle = badge.paused ? "#2ed573" : "#1a1a2e";
+        ctx.fill();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        ctx.fillStyle = "#ffffff";
+        if (badge.paused) {
+            ctx.beginPath();
+            ctx.moveTo(bx - 3, by - 4);
+            ctx.lineTo(bx - 3, by + 4);
+            ctx.lineTo(bx + 4, by);
+            ctx.closePath();
+            ctx.fill();
+        } else {
+            ctx.fillRect(bx - 3.5, by - 4, 2.4, 8);
+            ctx.fillRect(bx + 1.1, by - 4, 2.4, 8);
+        }
+        ctx.restore();
+    }
+    _emitterBadges.length = 0;
+
     updateBodyCountDisplay();
     updateEmitterPanelPosition();
     _rafId = requestAnimationFrame(gameLoop);
@@ -251,7 +381,10 @@ migrateOldSingleSave();
 refreshSceneList();
 populateScaleSelect();
 populateTimbreSelect();
+applyTheme(localStorage.getItem("symphony-theme") || "dark");
 updateUILanguage();
+autosaveStartInterval();
+restoreLastSessionIfAny();
 
 const timbreSelectEl = document.getElementById("timbre-select");
 if (timbreSelectEl) {
@@ -320,11 +453,17 @@ window.addEventListener("keydown", (e) => {
             clearSelection();
             return;
         }
+        if (key === "r") {
+            e.preventDefault();
+            rotateSelectedBodies(e.shiftKey ? -15 : 15);
+            return;
+        }
     }
 });
 
 // Cleanup on close
 window.addEventListener("beforeunload", () => {
+    autosaveNow();
     if (_rafId !== null) cancelAnimationFrame(_rafId);
     if (audioCtx.state !== "closed") audioCtx.close();
 });

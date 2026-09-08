@@ -5,10 +5,24 @@
                 --toolbox-bg: rgba(15, 15, 25, 0.95);
                 --border-color: #444;
                 --primary-border: #ff0055;
+                --accent: #ff0055;
+                --accent-glow: rgba(255, 0, 85, 0.2);
+                --accent-bright: #ff3366;
+                --wall-color: #1a1a2e;
                 --btn-bg: #222;
                 --btn-hover: #444;
                 --sub-btn-bg: #2a2a3d;
-                --wall-color: #1a1a2e;
+                --bg-sky-0: #1e1b4b;
+                --bg-sky-1: #311030;
+                --bg-sky-2: #0f172a;
+                --bg-sun: rgba(244, 114, 182, 0.15);
+                --bg-mt-far: rgba(30, 41, 59, 0.6);
+                --bg-mt-near: rgba(15, 23, 42, 0.85);
+                --bg-pagoda: #090d16;
+                --bg-tree-dim: #1e293b;
+                --bg-tree-strong: #0f172a;
+                --bg-blossom: rgba(244, 114, 182, 0.7);
+                --bg-leaf: #f472b6;
             }
 
             body.light-theme {
@@ -18,10 +32,186 @@
                 --toolbox-bg: rgba(240, 242, 245, 0.95);
                 --border-color: #ccc;
                 --primary-border: #ff0055;
+                --accent: #ff0055;
+                --accent-glow: rgba(255, 0, 85, 0.15);
+                --accent-bright: #ff3366;
                 --btn-bg: #e4e6eb;
                 --btn-hover: #d8dadf;
                 --sub-btn-bg: #d0d3d9;
                 --wall-color: #d1d5db;
+                --bg-sky-0: #ffd1dc;
+                --bg-sky-1: #e0f2fe;
+                --bg-sky-2: #f1f5f9;
+                --bg-sun: rgba(251, 191, 36, 0.3);
+                --bg-mt-far: rgba(148, 163, 184, 0.4);
+                --bg-mt-near: rgba(100, 116, 139, 0.6);
+                --bg-pagoda: #475569;
+                --bg-tree-dim: #94a3b8;
+                --bg-tree-strong: #334155;
+                --bg-blossom: rgba(244, 114, 182, 0.85);
+                --bg-leaf: #ec4899;
+            }
+
+            body.theme-cyberpunk {
+                --bg-color: #0a0018;
+                --text-color: #e0f8ff;
+                --ui-bg: rgba(12, 0, 26, 0.85);
+                --toolbox-bg: rgba(16, 0, 32, 0.95);
+                --border-color: #7a2fff;
+                --primary-border: #00ffe1;
+                --accent: #00ffe1;
+                --accent-glow: rgba(0, 255, 225, 0.18);
+                --accent-bright: #7dffef;
+                --wall-color: #0a1030;
+                --btn-bg: #1c0b3a;
+                --btn-hover: #33186b;
+                --sub-btn-bg: #221049;
+                --bg-sky-0: #0a0018;
+                --bg-sky-1: #2a0a4a;
+                --bg-sky-2: #07051a;
+                --bg-sun: rgba(0, 255, 225, 0.18);
+                --bg-mt-far: rgba(25, 20, 70, 0.7);
+                --bg-mt-near: rgba(12, 8, 40, 0.9);
+                --bg-pagoda: #0e0a33;
+                --bg-tree-dim: #12347a;
+                --bg-tree-strong: #0a0c30;
+                --bg-blossom: rgba(0, 255, 225, 0.35);
+                --bg-leaf: #00ffe1;
+            }
+
+            body.theme-synthwave {
+                --bg-color: #1a0519;
+                --text-color: #ffe9f5;
+                --ui-bg: rgba(32, 8, 34, 0.85);
+                --toolbox-bg: rgba(38, 10, 40, 0.95);
+                --border-color: #ff2e88;
+                --primary-border: #ff79c6;
+                --accent: #ff79c6;
+                --accent-glow: rgba(255, 121, 198, 0.2);
+                --accent-bright: #ffb3dd;
+                --wall-color: #2a0f36;
+                --btn-bg: #3a1540;
+                --btn-hover: #5b2564;
+                --sub-btn-bg: #4a1a50;
+                --bg-sky-0: #24051f;
+                --bg-sky-1: #4a1438;
+                --bg-sky-2: #1a0417;
+                --bg-sun: rgba(255, 121, 198, 0.28);
+                --bg-mt-far: rgba(90, 30, 90, 0.7);
+                --bg-mt-near: rgba(52, 16, 52, 0.9);
+                --bg-pagoda: #2a1033;
+                --bg-tree-dim: #5b2564;
+                --bg-tree-strong: #331040;
+                --bg-blossom: rgba(255, 179, 221, 0.55);
+                --bg-leaf: #ff79c6;
+            }
+
+            body.theme-matrix {
+                --bg-color: #001200;
+                --text-color: #d8ffd8;
+                --ui-bg: rgba(0, 18, 2, 0.85);
+                --toolbox-bg: rgba(0, 20, 3, 0.95);
+                --border-color: #1f9d3a;
+                --primary-border: #39ff6e;
+                --accent: #39ff6e;
+                --accent-glow: rgba(57, 255, 110, 0.15);
+                --accent-bright: #7affa3;
+                --wall-color: #031808;
+                --btn-bg: #062b0e;
+                --btn-hover: #0d4420;
+                --sub-btn-bg: #083512;
+                --bg-sky-0: #001408;
+                --bg-sky-1: #00330c;
+                --bg-sky-2: #000a04;
+                --bg-sun: rgba(57, 255, 110, 0.14);
+                --bg-mt-far: rgba(10, 60, 30, 0.6);
+                --bg-mt-near: rgba(4, 30, 14, 0.85);
+                --bg-pagoda: #031a08;
+                --bg-tree-dim: #0d4420;
+                --bg-tree-strong: #031808;
+                --bg-blossom: rgba(90, 255, 120, 0.3);
+                --bg-leaf: #39ff6e;
+            }
+
+            body.theme-sunset {
+                --bg-color: #140a05;
+                --text-color: #ffedd5;
+                --ui-bg: rgba(30, 12, 5, 0.85);
+                --toolbox-bg: rgba(36, 15, 6, 0.95);
+                --border-color: #b8501a;
+                --primary-border: #ff9e40;
+                --accent: #ff9e40;
+                --accent-glow: rgba(255, 158, 64, 0.18);
+                --accent-bright: #ffbe77;
+                --wall-color: #3a1a0a;
+                --btn-bg: #4a2410;
+                --btn-hover: #6b3a1e;
+                --sub-btn-bg: #5a2e15;
+                --bg-sky-0: #2a0e06;
+                --bg-sky-1: #6b2414;
+                --bg-sky-2: #1a0804;
+                --bg-sun: rgba(255, 158, 64, 0.3);
+                --bg-mt-far: rgba(140, 50, 30, 0.55);
+                --bg-mt-near: rgba(70, 24, 14, 0.85);
+                --bg-pagoda: #3a1a0a;
+                --bg-tree-dim: #6b3a1e;
+                --bg-tree-strong: #3a1a0a;
+                --bg-blossom: rgba(255, 190, 119, 0.4);
+                --bg-leaf: #ff9e40;
+            }
+
+            body.theme-forest {
+                --bg-color: #04120a;
+                --text-color: #e2f5e8;
+                --ui-bg: rgba(6, 24, 12, 0.85);
+                --toolbox-bg: rgba(8, 28, 14, 0.95);
+                --border-color: #2e7d4f;
+                --primary-border: #59d48a;
+                --accent: #59d48a;
+                --accent-glow: rgba(89, 212, 138, 0.16);
+                --accent-bright: #8fecb4;
+                --wall-color: #0a2818;
+                --btn-bg: #0d3a20;
+                --btn-hover: #155532;
+                --sub-btn-bg: #103f26;
+                --bg-sky-0: #04200f;
+                --bg-sky-1: #0a441f;
+                --bg-sky-2: #03120a;
+                --bg-sun: rgba(143, 236, 180, 0.16);
+                --bg-mt-far: rgba(20, 80, 45, 0.55);
+                --bg-mt-near: rgba(8, 40, 20, 0.85);
+                --bg-pagoda: #062a14;
+                --bg-tree-dim: #155532;
+                --bg-tree-strong: #062a14;
+                --bg-blossom: rgba(143, 236, 180, 0.4);
+                --bg-leaf: #8fecb4;
+            }
+
+            body.theme-candy {
+                --bg-color: #160510;
+                --text-color: #ffeefb;
+                --ui-bg: rgba(30, 8, 26, 0.85);
+                --toolbox-bg: rgba(36, 10, 32, 0.95);
+                --border-color: #e3509f;
+                --primary-border: #ff5fc8;
+                --accent: #ff5fc8;
+                --accent-glow: rgba(255, 95, 200, 0.18);
+                --accent-bright: #ffa2dd;
+                --wall-color: #3a0f30;
+                --btn-bg: #501a42;
+                --btn-hover: #6e2b5c;
+                --sub-btn-bg: #572047;
+                --bg-sky-0: #280a20;
+                --bg-sky-1: #521844;
+                --bg-sky-2: #1a0420;
+                --bg-sun: rgba(255, 162, 221, 0.25);
+                --bg-mt-far: rgba(120, 40, 100, 0.5);
+                --bg-mt-near: rgba(64, 20, 54, 0.85);
+                --bg-pagoda: #3a102e;
+                --bg-tree-dim: #6e2b5c;
+                --bg-tree-strong: #3a102e;
+                --bg-blossom: rgba(255, 182, 231, 0.45);
+                --bg-leaf: #ffa2dd;
             }
 
             body {
@@ -49,6 +239,7 @@
                 height: 100%;
                 z-index: 1;
                 cursor: grab;
+                touch-action: none;
             }
             #bg-canvas {
                 position: absolute;
@@ -70,13 +261,13 @@
                 pointer-events: none;
                 backdrop-filter: blur(8px);
                 max-width: 280px;
-                box-shadow: 0 0 20px rgba(255, 0, 85, 0.2);
+                box-shadow: 0 0 20px var(--accent-glow);
                 z-index: 10;
             }
             h1 {
                 margin: 0 0 6px 0;
                 font-size: 16px;
-                color: #ff0055;
+                color: var(--accent);
                 text-transform: uppercase;
                 letter-spacing: 1px;
                 font-weight: 700;
@@ -183,8 +374,8 @@
                 font-weight: 600;
             }
             .block-btn.active {
-                border-color: #ff0055;
-                background: #331122;
+                border-color: var(--accent);
+                background: color-mix(in srgb, var(--accent) 18%, transparent);
                 font-weight: bold;
                 color: #fff;
             }
@@ -312,7 +503,7 @@
                 transform: rotate(90deg);
             }
             .accordion summary:hover {
-                background: rgba(255, 0, 85, 0.08);
+                background: var(--accent-glow);
             }
             .accordion .accordion-body {
                 padding: 10px;
@@ -449,12 +640,12 @@
                 border-color: #888;
             }
             .drum-step.active {
-                border-color: #ff0055;
-                box-shadow: 0 0 8px rgba(255, 0, 85, 0.45);
+                border-color: var(--accent);
+                box-shadow: 0 0 8px var(--accent-glow);
             }
             .drum-step.filled {
-                background: #331122;
-                border-color: #ff0055;
+                background: color-mix(in srgb, var(--accent) 18%, transparent);
+                border-color: var(--accent);
                 color: #fff;
             }
             .drum-step .step-num {
@@ -537,9 +728,10 @@
             }
             .select-tools {
                 display: grid;
-                grid-template-columns: repeat(4, 1fr);
+                grid-template-columns: repeat(5, 1fr);
                 gap: 5px;
                 margin-top: 6px;
+                align-items: center;
             }
             .special-btn {
                 background: var(--btn-bg);
@@ -555,9 +747,9 @@
                 font-weight: 600;
             }
             .special-btn.active {
-                border-color: #ffa502;
-                background: #443311;
-                color: #ffa502;
+                border-color: var(--accent);
+                background: color-mix(in srgb, var(--accent) 20%, transparent);
+                color: var(--accent-bright);
             }
             .special-btn#btn-eraser.active {
                 border-color: #ff4757;
@@ -567,7 +759,7 @@
             input[type="range"],
             input[type="number"] {
                 width: 100%;
-                accent-color: #ff0055;
+                accent-color: var(--accent);
                 cursor: pointer;
             }
             input[type="number"] {
@@ -591,7 +783,7 @@
                 margin-bottom: 6px;
             }
             .slider-val {
-                color: #ff0055;
+                color: var(--accent);
                 font-weight: bold;
             }
             .mixer-grid {
@@ -647,13 +839,13 @@
                 border-color: #888;
             }
             button.primary {
-                background: #ff0055;
+                background: var(--accent);
                 color: #fff;
-                border-color: #ff0055;
-                box-shadow: 0 0 10px rgba(255, 0, 85, 0.4);
+                border-color: var(--accent);
+                box-shadow: 0 0 10px var(--accent-glow);
             }
             button.primary:hover {
-                background: #ff3366;
+                background: var(--accent-bright);
             }
             button.action-btn#btn-pause-play {
                 background: linear-gradient(135deg, #3b82f6, #1d4ed8);

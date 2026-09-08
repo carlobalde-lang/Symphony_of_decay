@@ -37,8 +37,103 @@ function toggleToolbox(event) {
     document.getElementById("toolbox").classList.toggle("collapsed");
 }
 
-function toggleTheme() {
-    document.body.classList.toggle("light-theme");
+const THEME_NAMES = ["dark", "light", "cyberpunk", "synthwave", "matrix", "sunset", "forest", "candy"];
+const THEME_CLASSES = THEME_NAMES.slice(1).map((n) => "theme-" + n);
+
+// --- Colorazione oggetti in base al tema ---
+let _themeHueCacheKey = null;
+let _themeHueShift = 0;
+
+function hexToHue(hex) {
+    const m = /^#([0-9a-f]{6})$/i.exec(hex);
+    if (!m) return null;
+    const r = parseInt(m[1].substr(0, 2), 16) / 255;
+    const g = parseInt(m[1].substr(2, 2), 16) / 255;
+    const b = parseInt(m[1].substr(4, 2), 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    if (max === min) return 0;
+    const d = max - min;
+    let h;
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    return h * 60;
+}
+
+function rgbToCss(r, g, b) {
+    const to = (v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0");
+    return "#" + to(r) + to(g) + to(b);
+}
+
+function getThemeHueShift() {
+    const key = document.body.className || "default";
+    if (_themeHueCacheKey === key) return _themeHueShift;
+    const accent = (getComputedStyle(document.body).getPropertyValue("--accent") || "#ff0055").trim();
+    const hue = hexToHue(accent);
+    _themeHueShift = hue === null ? 0 : hue - 340;
+    _themeHueCacheKey = key;
+    return _themeHueShift;
+}
+
+function shiftHueColor(hex) {
+    const m = /^#([0-9a-f]{6})$/i.exec(hex);
+    if (!m) return hex;
+    const shift = getThemeHueShift();
+    if (shift === 0) return hex;
+    const r = parseInt(m[1].substr(0, 2), 16) / 255;
+    const g = parseInt(m[1].substr(2, 2), 16) / 255;
+    const b = parseInt(m[1].substr(4, 2), 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const d = max - min;
+    const l = (max + min) / 2;
+    const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+    let h = 0;
+    if (d !== 0) {
+        if (max === r) h = ((g - b) / d) % 6;
+        else if (max === g) h = (b - r) / d + 2;
+        else h = (r - g) / d + 4;
+    }
+    h = ((h * 60 + shift + 360) % 360) / 60;
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs((h % 2) - 1));
+    const mm = l - c / 2;
+    let rp = 0, gp = 0, bp = 0;
+    if (h < 1) { rp = c; gp = x; bp = 0; }
+    else if (h < 2) { rp = x; gp = c; bp = 0; }
+    else if (h < 3) { rp = 0; gp = c; bp = x; }
+    else if (h < 4) { rp = 0; gp = x; bp = c; }
+    else if (h < 5) { rp = x; gp = 0; bp = c; }
+    else { rp = c; gp = 0; bp = x; }
+    return rgbToCss((rp + mm) * 255, (gp + mm) * 255, (bp + mm) * 255);
+}
+
+function refreshRenderColors() {
+    _themeHueCacheKey = null;
+    for (let b = world.getBodyList(); b; b = b.getNext()) {
+        if (b.baseColor) b.renderColor = shiftHueColor(b.baseColor);
+    }
+    for (let j = world.getJointList(); j; j = j.getNext()) {
+        if (j.baseColor) j.renderColor = shiftHueColor(j.baseColor);
+    }
+}
+
+function applyTheme(name) {
+    if (!THEME_NAMES.includes(name)) name = "dark";
+    document.body.classList.remove("light-theme");
+    THEME_CLASSES.forEach((c) => document.body.classList.remove(c));
+    if (name === "light") {
+        document.body.classList.add("light-theme");
+    } else if (name !== "dark") {
+        document.body.classList.add("theme-" + name);
+    }
+    localStorage.setItem("symphony-theme", name);
+    const sel = document.getElementById("theme-select");
+    if (sel) sel.value = name;
+    refreshRenderColors();
+}
+
+function setTheme(name) {
+    applyTheme(name);
 }
 
 function togglePause() {
@@ -170,6 +265,10 @@ function getEmitterSpawnableTypes() {
     return Object.keys(blockConfigs).filter((k) => k !== "wall" && k !== "emitter");
 }
 
+// Su dispositivi touch (telefono/tablet) gli oggetti spawnano a metà dimensione
+// (blocchi, sfere, strumenti, muri e emettitori) per essere più comodi al dito.
+const SPAWN_SCALE = window.matchMedia("(pointer: coarse)").matches ? 0.5 : 1;
+
 const EMITTER_MIN_INTERVAL_MS = 120; // limite di sicurezza a BPM molto alti
 const DEFAULT_PATTERN_LENGTH = 16; // step del sequencer stile drum machine
 const VELOCITY_LEVELS = [0.55, 1.0, 1.4]; // soft, mid, loud — moltiplicatori di potenza
@@ -194,30 +293,31 @@ const DRAG_THRESHOLD = 6; // px di movimento necessario per attivare il drag-pai
 function spawnElement(x, y, typeKey) {
     const cfg = blockConfigs[typeKey];
     const currentDrag = _cachedDrag;
+    const s = SPAWN_SCALE;
     let body = cfg.isStatic
         ? world.createBody({ type: "static", position: planck.Vec2(x, y) })
         : world.createDynamicBody({ position: planck.Vec2(x, y) });
 
     if (cfg.isCircle) {
-        body.createFixture(planck.Circle(cfg.radius / SCALE), {
+        body.createFixture(planck.Circle((cfg.radius * s) / SCALE), {
             density: cfg.density,
             restitution: cfg.restitution,
-            friction: 0.2
+            friction: 0.6
         });
     } else if (cfg.isRect) {
-        body.createFixture(planck.Box(cfg.w / 2 / SCALE, cfg.h / 2 / SCALE), {
+        body.createFixture(planck.Box((cfg.w / 2 / SCALE) * s, (cfg.h / 2 / SCALE) * s), {
             density: cfg.density,
             restitution: cfg.restitution,
-            friction: 0.2
+            friction: 0.6
         });
         if (typeKey === "wall") {
-            body.wallHalfW = cfg.w / 2 / SCALE;
-            body.wallHalfH = cfg.h / 2 / SCALE;
+            body.wallHalfW = (cfg.w / 2 / SCALE) * s;
+            body.wallHalfH = (cfg.h / 2 / SCALE) * s;
         }
         if (typeKey === "emitter") {
             body.isEmitter = true;
-            body.emitterHalfW = cfg.w / 2 / SCALE;
-            body.emitterHalfH = cfg.h / 2 / SCALE;
+            body.emitterHalfW = (cfg.w / 2 / SCALE) * s;
+            body.emitterHalfH = (cfg.h / 2 / SCALE) * s;
             body.emitterObjectType = "bass";
             body.emitterPower = 12;
             body.emitterBPM = 90;
@@ -235,23 +335,24 @@ function spawnElement(x, y, typeKey) {
             body.emitterSwing = 0;
         }
     } else if (cfg.sides === 4) {
-        body.createFixture(planck.Box(cfg.size / SCALE, cfg.size / SCALE), {
+        body.createFixture(planck.Box((cfg.size / SCALE) * s, (cfg.size / SCALE) * s), {
             density: cfg.density,
             restitution: cfg.restitution,
-            friction: 0.2
+            friction: 0.6
         });
     } else {
-        const verts = getPolygonVertices(cfg.size, cfg.sides);
+        const verts = getPolygonVertices(cfg.size * s, cfg.sides);
         body.createFixture(planck.Polygon(verts), {
             density: cfg.density,
             restitution: cfg.restitution,
-            friction: 0.2
+            friction: 0.6
         });
     }
 
     body.setLinearDamping(currentDrag);
     body.soundType = cfg.name;
-    body.renderColor = cfg.color;
+    body.baseColor = cfg.color;
+    body.renderColor = shiftHueColor(cfg.color);
     return body;
 }
 
@@ -600,6 +701,36 @@ function mirrorSelection(axis) {
     flashMessage(t("sel-mirrored"), "#00d2ff");
 }
 
+function rotateSelectedBodies(deg) {
+    if (selectedBodies.size === 0) return;
+    const rad = (deg * Math.PI) / 180;
+    let cx = 0, cy = 0, n = 0;
+    for (const b of selectedBodies) {
+        const p = b.getPosition();
+        cx += p.x;
+        cy += p.y;
+        n++;
+    }
+    if (!n) return;
+    cx /= n;
+    cy /= n;
+
+    saveUndoState();
+
+    const cosA = Math.cos(rad);
+    const sinA = Math.sin(rad);
+    for (const b of selectedBodies) {
+        const p = b.getPosition();
+        const dx = p.x - cx;
+        const dy = p.y - cy;
+        b.setPosition(planck.Vec2(cx + dx * cosA - dy * sinA, cy + dx * sinA + dy * cosA));
+        b.setAngle(b.getAngle() + rad);
+        b.setLinearVelocity(planck.Vec2(0, 0));
+        b.setAngularVelocity(0);
+    }
+    flashMessage(t("sel-rotated"), "#00d2ff");
+}
+
 function deleteSelectedBodies() {
     if (selectedBodies.size === 0) return;
     saveUndoState();
@@ -746,7 +877,9 @@ function triggerDecay() {
 }
 
 function clearScene() {
-    // 1) Raccogli
+    // 1) I muri perimetrali vengono rimessi alla dimensione della finestra
+    resetBoundaryToWindow();
+    // 2) Raccogli
     const toDestroy = [];
     for (let b = world.getBodyList(); b; b = b.getNext()) {
         if (!b.isWall) toDestroy.push(b);
@@ -820,12 +953,29 @@ function resetGlobalClock() {
     flashMessage("🎼 " + t("global-clock-reset"), "#2ed573");
 }
 
+function getEmitterActivePattern(b) {
+    const banks = Array.isArray(b.emitterPatternBanks) && b.emitterPatternBanks.length > 0 ? b.emitterPatternBanks : null;
+    const chainOn = !!b.emitterChainEnabled && !!banks && banks.length > 1;
+    if (chainOn) {
+        const playBank = banks[((b.emitterChainPlayingBank || 0) % banks.length + banks.length) % banks.length];
+        if (Array.isArray(playBank)) return playBank;
+    }
+    return (b.emitterPattern && b.emitterPattern.length > 0 ? b.emitterPattern : (banks ? banks[b.emitterActiveBank || 0] : null)) || [];
+}
+
 function alignEmitterToGrid(b) {
     const beatLenMs = 60000 / globalClockBpm;
     const gridMs = Math.max(EMITTER_MIN_INTERVAL_MS, b.emitterSyncDivision * beatLenMs);
     const elapsed = Date.now() - globalClockOriginMs;
     const nextIndex = Math.floor(elapsed / gridMs) + 1;
     b.emitterNextFireMs = globalClockOriginMs + nextIndex * gridMs;
+    // Allinea anche il playhead del sequencer alla cella del prossimo tick:
+    // così un emitter che entra in sync o riprende da pausa mostrerà e partirà
+    // dalla stessa cella attiva degli altri emitter sincronizzati.
+    const pat = getEmitterActivePattern(b);
+    if (Array.isArray(pat) && pat.length > 0) {
+        b.emitterPatternIndex = nextIndex % pat.length;
+    }
 }
 
 function realignAllSyncedEmitters() {
@@ -847,6 +997,7 @@ function updateEmitters() {
             const beatLenMs = 60000 / globalClockBpm;
             const gridMs = Math.max(EMITTER_MIN_INTERVAL_MS, b.emitterSyncDivision * beatLenMs);
             const swingOff = gridMs * swingPct * 0.5;
+            const prevFireMs = b.emitterNextFireMs;
             let guard = 0;
             while (b.emitterNextFireMs <= now && guard < 64) {
                 const tickIdx = Math.floor((b.emitterNextFireMs - globalClockOriginMs) / gridMs);
@@ -854,6 +1005,19 @@ function updateEmitters() {
                 b.emitterNextFireMs += Math.max(EMITTER_MIN_INTERVAL_MS, gridMs + swing);
                 guard++;
             }
+            // L'emitter era rimasto indietro (ripartito da pausa o clock spostato):
+            // non deve sparare subito il tick arretrato, ma restare in attesa del
+            // prossimo confine così riparte in sincrono sulla cella attiva, insieme
+            // agli altri emitter sincronizzati.
+            if (b.emitterNextFireMs - prevFireMs > gridMs * 1.5) {
+                const fireTick = Math.floor((b.emitterNextFireMs - globalClockOriginMs) / gridMs);
+                const syncPat = getEmitterActivePattern(b);
+                if (Array.isArray(syncPat) && syncPat.length > 0) {
+                    b.emitterPatternIndex = fireTick % syncPat.length;
+                }
+                continue;
+            }
+            b._syncCellIdx = Math.floor((b.emitterNextFireMs - globalClockOriginMs) / gridMs) - 1;
         } else {
             const baseInterval = Math.max(EMITTER_MIN_INTERVAL_MS, 60000 / Math.max(1, b.emitterBPM));
             const isOdd = b.emitterPatternIndex % 2 === 1;
@@ -884,10 +1048,21 @@ function updateEmitters() {
 
         const hasPatternNotes = playingPattern && playingPattern.some((s) => stepType(s) && blockConfigs[stepType(s)]);
         if (hasPatternNotes) {
-            const step = playingPattern[flashIdx];
-            b.emitterPatternIndex = (b.emitterPatternIndex + 1) % Math.max(1, playingPattern.length);
-            if (chainOn && b.emitterPatternIndex === 0) {
-                b.emitterChainPlayingBank = ((b.emitterChainPlayingBank || 0) + 1) % banks.length;
+            let step;
+            if (b.emitterSyncEnabled) {
+                // La cella da suonare deriva dal tick globale: per tutti gli emitter
+                // con sync vale lo stesso indice di griglia → stessa cella del sequencer.
+                b.emitterPatternIndex = ((b._syncCellIdx % Math.max(1, playingPattern.length)) + Math.max(1, playingPattern.length)) % Math.max(1, playingPattern.length);
+                if (chainOn && b.emitterPatternIndex === 0) {
+                    b.emitterChainPlayingBank = ((b.emitterChainPlayingBank || 0) + 1) % banks.length;
+                }
+                step = playingPattern[b.emitterPatternIndex];
+            } else {
+                step = playingPattern[flashIdx];
+                b.emitterPatternIndex = (b.emitterPatternIndex + 1) % Math.max(1, playingPattern.length);
+                if (chainOn && b.emitterPatternIndex === 0) {
+                    b.emitterChainPlayingBank = ((b.emitterChainPlayingBank || 0) + 1) % banks.length;
+                }
             }
             const sType = stepType(step);
             if (sType && blockConfigs[sType]) {
@@ -899,22 +1074,29 @@ function updateEmitters() {
         } else {
             // Anche senza note, l'indice avanza: mantiene coerenza parità/griglia e,
             // in catena, consente di passare al banco successivo se questo è vuoto.
-            b.emitterPatternIndex = (b.emitterPatternIndex + 1) % Math.max(1, playingPattern.length);
-            if (chainOn && b.emitterPatternIndex === 0) {
-                b.emitterChainPlayingBank = ((b.emitterChainPlayingBank || 0) + 1) % banks.length;
+            if (b.emitterSyncEnabled) {
+                b.emitterPatternIndex = ((b._syncCellIdx % Math.max(1, playingPattern.length)) + Math.max(1, playingPattern.length)) % Math.max(1, playingPattern.length);
+                if (chainOn && b.emitterPatternIndex === 0) {
+                    b.emitterChainPlayingBank = ((b.emitterChainPlayingBank || 0) + 1) % banks.length;
+                }
+            } else {
+                b.emitterPatternIndex = (b.emitterPatternIndex + 1) % Math.max(1, playingPattern.length);
+                if (chainOn && b.emitterPatternIndex === 0) {
+                    b.emitterChainPlayingBank = ((b.emitterChainPlayingBank || 0) + 1) % banks.length;
+                }
             }
             spawnType = blockConfigs[b.emitterObjectType] ? b.emitterObjectType : "bass";
         }
         const cfg = blockConfigs[spawnType];
         const halfH = b.emitterHalfH;
-        const muzzleOffset = halfH + (cfg.radius || cfg.size || cfg.h / 2 || 20) / SCALE + 4 / SCALE;
+        const muzzleOffset = halfH + ((cfg.radius || cfg.size || cfg.h / 2 || 20) * SPAWN_SCALE) / SCALE + 4 / SCALE;
         const spawnPoint = b.getWorldPoint(planck.Vec2(0, -muzzleOffset));
         const forward = b.getWorldVector(planck.Vec2(0, -1));
 
         const projectile = spawnElement(spawnPoint.x, spawnPoint.y, spawnType);
         projectile.spawnX = spawnPoint.x;
         projectile.spawnY = spawnPoint.y;
-        projectile.spawnRadius = (cfg.radius || cfg.size || cfg.h / 2 || 20) / SCALE;
+        projectile.spawnRadius = ((cfg.radius || cfg.size || cfg.h / 2 || 20) * SPAWN_SCALE) / SCALE;
         projectile.spawnedAtMs = Date.now();
         const power = (b.emitterPower || 12) * (VELOCITY_LEVELS[spawnVel] || 1);
         projectile.setLinearVelocity(planck.Vec2(forward.x * power, forward.y * power));
@@ -1533,8 +1715,8 @@ function positionEmitterPanel(target) {
     const vh = window.innerHeight;
 
     const pos = target.getPosition();
-    const ex = pos.x * SCALE;
-    const ey = pos.y * SCALE;
+    const ex = worldToScreenX(pos.x);
+    const ey = worldToScreenY(pos.y);
 
     const panelW = panel.offsetWidth || 300;
     const panelH = panel.offsetHeight || 300;

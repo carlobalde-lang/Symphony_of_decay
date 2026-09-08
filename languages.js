@@ -18,6 +18,15 @@ const TRANSLATIONS = {
         "trail-label": "Visual - Motion Trail",
         "select-object": "Select Object",
         "btn-theme": "🌓 Theme",
+        "theme-label": "Theme:",
+        "theme-dark": "🌑 Dark",
+        "theme-light": "☀️ Light",
+        "theme-cyberpunk": "🤖 Cyberpunk",
+        "theme-synthwave": "🌅 Synthwave",
+        "theme-matrix": "🟩 Matrix",
+        "theme-sunset": "🌇 Sunset",
+        "theme-forest": "🌲 Forest",
+        "theme-candy": "🍬 Candy",
         "block-wall": "Wall",
         "timbre-label": "Timbre / Sound Type:",
         "scale-label": "Musical Scale:",
@@ -33,8 +42,10 @@ const TRANSLATIONS = {
         "sel-copied": "📋 Copied selection",
         "sel-pasted": "📥 Pasted selection",
         "sel-mirrored": "🪞 Selection mirrored",
+        "sel-rotated": "🔄 Selection rotated",
         "sel-deleted": "🗑️ Selection deleted",
         "sel-count": "{n} selected",
+        "tool-snap-grid": "▦ Grid",
         "accordion-objects": "🧩 Spawnable Objects",
         "category-shapes": "🔷 Shapes",
         "category-notes": "🎵 Musical Notes",
@@ -44,6 +55,14 @@ const TRANSLATIONS = {
         "accordion-physics": "🌍 Physics",
         "accordion-audio": "🔊 Audio",
         "accordion-graphics": "🎨 Graphics",
+        "record-label": "Record Session (WAV)",
+        "record-start": "⏺️ Record",
+        "record-stop": "⏹️ Stop",
+        "record-message-start": "🔴 Recording started",
+        "record-message-stop": "💾 Recording saved as WAV",
+        "snap-grid-label": "Snap to Grid",
+        "bloom-label": "Bloom / Glow",
+        "screenshot-btn": "📸 Save Screenshot (PNG)",
         "gravity-label": "Physics - Gravity Y",
         "air-drag": "Physics - Air Drag",
         "wind-speed": "Wind - Speed",
@@ -64,9 +83,9 @@ const TRANSLATIONS = {
             "Wall Mode: Click empty space to create a wall. Drag arrows to resize, blue circle to rotate. Click elsewhere to confirm. Double tap an existing wall to edit it again.",
         "inst-wall-edit":
             "Drag arrows to resize, blue circle to rotate, or drag the wall body to move it. Click elsewhere to confirm.",
-        "inst-bar": "Rigid Bar Mode: Click first point, then second point.",
-        "inst-rope": "Rope Mode: Click first point, then second point.",
-        "inst-chain": "Rigid Chain Mode: Click first point, then second point.",
+        "inst-bar": "Rigid Bar Mode: Click two points, or click-drag between two points.",
+        "inst-rope": "Rope Mode: Click two points, or click-drag between two points.",
+        "inst-chain": "Rigid Chain Mode: Click two points, or click-drag between two points.",
         "inst-eraser": "Eraser Mode: Click an object, bar, or rope to delete it.",
         "inst-select":
             "Select Mode: click an object to select it, Shift+click to add/remove, drag an empty area to draw a selection box. Drag selected objects to move them. Ctrl+C / Ctrl+V to copy & paste, Ctrl+M / Ctrl+Shift+M to mirror, Delete to remove.",
@@ -140,6 +159,15 @@ const TRANSLATIONS = {
         "btn-glitch": "⚡ GLITCH",
         "select-object": "Seleziona Oggetto",
         "btn-theme": "🌓 Tema",
+        "theme-label": "Tema:",
+        "theme-dark": "🌑 Buio",
+        "theme-light": "☀️ Chiaro",
+        "theme-cyberpunk": "🤖 Cyberpunk",
+        "theme-synthwave": "🌅 Synthwave",
+        "theme-matrix": "🟩 Matrix",
+        "theme-sunset": "🌇 Tramonto",
+        "theme-forest": "🌲 Foresta",
+        "theme-candy": "🍬 Caramella",
         "block-wall": "Muro",
         "timbre-label": "Timbro / Tipo Suono:",
         "scale-label": "Scala Musicale:",
@@ -155,8 +183,10 @@ const TRANSLATIONS = {
         "sel-copied": "📋 Selezione copiata",
         "sel-pasted": "📥 Selezione incollata",
         "sel-mirrored": "🪞 Selezione specchiata",
+        "sel-rotated": "🔄 Selezione ruotata",
         "sel-deleted": "🗑️ Selezione eliminata",
         "sel-count": "{n} selezionati",
+        "tool-snap-grid": "▦ Griglia",
         "accordion-objects": "🧩 Oggetti Spawnabili",
         "category-shapes": "🔷 Forme",
         "category-notes": "🎵 Note Musicali",
@@ -166,6 +196,14 @@ const TRANSLATIONS = {
         "accordion-physics": "🌍 Fisica",
         "accordion-audio": "🔊 Audio",
         "accordion-graphics": "🎨 Grafica",
+        "record-label": "Registra sessione (WAV)",
+        "record-start": "⏺️ Registra",
+        "record-stop": "⏹️ Ferma",
+        "record-message-start": "🔴 Registrazione avviata",
+        "record-message-stop": "💾 Registrazione salvata come WAV",
+        "snap-grid-label": "Snap alla griglia",
+        "bloom-label": "Bloom / Bagliore",
+        "screenshot-btn": "📸 Salva screenshot (PNG)",
         "gravity-label": "Fisica - Gravità Y",
         "air-drag": "Fisica - Attrito Aria",
         "wind-speed": "Vento - Velocità",
@@ -186,9 +224,9 @@ const TRANSLATIONS = {
             "Modo Muro: Clicca a vuoto per creare un muro. Trascina le frecce per ridimensionarlo, il cerchio blu per ruotarlo. Clicca altrove per confermare. Doppio tap su un muro esistente per modificarlo di nuovo.",
         "inst-wall-edit":
             "Trascina le frecce per ridimensionare, il cerchio blu per ruotare, oppure trascina il corpo del muro per spostarlo. Clicca altrove per confermare.",
-        "inst-bar": "Modo Barra Rigida: Clicca sul primo punto e poi sul secondo.",
-        "inst-rope": "Modo Corda: Clicca sul primo punto e poi sul secondo.",
-        "inst-chain": "Modo Catena Rigida: Clicca sul primo punto e poi sul secondo.",
+        "inst-bar": "Modo Barra Rigida: Clicca due punti, oppure clicca e trascina tra due punti.",
+        "inst-rope": "Modo Corda: Clicca due punti, oppure clicca e trascina tra due punti.",
+        "inst-chain": "Modo Catena Rigida: Clicca due punti, oppure clicca e trascina tra due punti.",
         "inst-eraser": "Modo Gomma: Clicca un oggetto, una barra o una corda per cancellarla.",
         "inst-select":
             "Modo Selezione: clicca un oggetto per selezionarlo, Maiusc+clic per aggiungerlo/toglierlo, trascina su uno spazio vuoto per disegnare una cornice di selezione. Trascina gli oggetti selezionati per spostarli. Ctrl+C / Ctrl+V per copia e incolla, Ctrl+M / Ctrl+Maiusc+M per specchiare, Canc per eliminare.",
@@ -276,18 +314,25 @@ function updateUILanguage() {
 
 function updateInstructionText() {
     const el = document.getElementById("instruction-mode");
+    const shortcutEl = document.getElementById("instruction-shortcuts");
     syncEmitterPanel();
     if (!el) return;
+    const setShortcuts = (text) => {
+        if (shortcutEl) shortcutEl.innerText = text || "";
+    };
     if (isPaused) {
         el.innerText = t("inst-paused");
+        setShortcuts("");
         return;
     }
     if (editingWallBody) {
         el.innerText = editingWallBody.isEmitter ? t("inst-emitter-edit") : t("inst-wall-edit");
+        setShortcuts("🖱️ Wheel: angle • 🎯 drag handle • Middle-drag: pan • Wheel: zoom");
         return;
     }
     if (currentMode === "none") {
         el.innerText = t("inst-free");
+        setShortcuts("🖱️ Wheel: zoom • Middle-drag: pan");
     } else if (currentMode === "spawn") {
         if (currentChoice === "wall") {
             el.innerText = t("inst-wall");
@@ -296,16 +341,22 @@ function updateInstructionText() {
         } else {
             el.innerText = t("inst-default");
         }
+        setShortcuts("🖱️ Wheel: zoom • Middle-drag: pan");
     } else if (currentMode === "bar") {
         el.innerText = t("inst-bar");
+        setShortcuts("🖱️ Wheel: zoom • Middle-drag: pan");
     } else if (currentMode === "rope") {
         el.innerText = t("inst-rope");
+        setShortcuts("🖱️ Wheel: zoom • Middle-drag: pan");
     } else if (currentMode === "chain") {
         el.innerText = t("inst-chain");
+        setShortcuts("🖱️ Wheel: zoom • Middle-drag: pan");
     } else if (currentMode === "eraser") {
         el.innerText = t("inst-eraser");
+        setShortcuts("🖱️ Wheel: zoom • Middle-drag: pan");
     } else if (currentMode === "select") {
         el.innerText = t("inst-select");
+        setShortcuts("R: rot 15° • Shift+R: -15° • Del: elimina • Esc: deseleziona • Ctrl+C: copia • Ctrl+V: incolla • Ctrl+M: specchia • 🖱️ Wheel: zoom • Middle-drag: pan");
     }
 }
 

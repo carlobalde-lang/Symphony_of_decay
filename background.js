@@ -142,32 +142,51 @@ for (let i = 0; i < 90; i++) {
     });
 }
 
+let _bgVarCache = null;
+let _bgVarCacheKey = null;
+
+function getBgVars() {
+    const key = document.body.className || "default";
+    if (_bgVarCache && _bgVarCacheKey === key) return _bgVarCache;
+    const cs = getComputedStyle(document.body);
+    const get = (n, fb) => (cs.getPropertyValue(n) || fb).trim();
+    _bgVarCache = {
+        sky0: get("--bg-sky-0", "#1e1b4b"),
+        sky1: get("--bg-sky-1", "#311030"),
+        sky2: get("--bg-sky-2", "#0f172a"),
+        sun: get("--bg-sun", "rgba(244, 114, 182, 0.15)"),
+        mtFar: get("--bg-mt-far", "rgba(30, 41, 59, 0.6)"),
+        mtNear: get("--bg-mt-near", "rgba(15, 23, 42, 0.85)"),
+        pagoda: get("--bg-pagoda", "#090d16"),
+        treeDim: get("--bg-tree-dim", "#1e293b"),
+        treeStrong: get("--bg-tree-strong", "#0f172a"),
+        blossom: get("--bg-blossom", "rgba(244, 114, 182, 0.7)"),
+        leaf: get("--bg-leaf", "#f472b6")
+    };
+    _bgVarCacheKey = key;
+    return _bgVarCache;
+}
+
 function drawJapaneseBackground() {
-    const isLight = document.body.classList.contains("light-theme");
+    const bg = getBgVars();
     bgCtx.clearRect(0, 0, logicalWidth, logicalHeight);
 
     const w = logicalWidth;
     const h = logicalHeight;
 
     let skyGrad = bgCtx.createLinearGradient(0, 0, 0, h);
-    if (isLight) {
-        skyGrad.addColorStop(0, "#ffd1dc");
-        skyGrad.addColorStop(0.5, "#e0f2fe");
-        skyGrad.addColorStop(1, "#f1f5f9");
-    } else {
-        skyGrad.addColorStop(0, "#1e1b4b");
-        skyGrad.addColorStop(0.5, "#311030");
-        skyGrad.addColorStop(1, "#0f172a");
-    }
+    skyGrad.addColorStop(0, bg.sky0);
+    skyGrad.addColorStop(0.5, bg.sky1);
+    skyGrad.addColorStop(1, bg.sky2);
     bgCtx.fillStyle = skyGrad;
     bgCtx.fillRect(0, 0, w, h);
 
-    bgCtx.fillStyle = isLight ? "rgba(251, 191, 36, 0.3)" : "rgba(244, 114, 182, 0.15)";
+    bgCtx.fillStyle = bg.sun;
     bgCtx.beginPath();
     bgCtx.arc(w * 0.8, h * 0.25, 70, 0, Math.PI * 2);
     bgCtx.fill();
 
-    bgCtx.fillStyle = isLight ? "rgba(148, 163, 184, 0.4)" : "rgba(30, 41, 59, 0.6)";
+    bgCtx.fillStyle = bg.mtFar;
     bgCtx.beginPath();
     bgCtx.moveTo(0, h * 0.65);
     bgCtx.lineTo(w * 0.2, h * 0.45);
@@ -179,7 +198,7 @@ function drawJapaneseBackground() {
     bgCtx.closePath();
     bgCtx.fill();
 
-    bgCtx.fillStyle = isLight ? "rgba(100, 116, 139, 0.6)" : "rgba(15, 23, 42, 0.85)";
+    bgCtx.fillStyle = bg.mtNear;
     bgCtx.beginPath();
     bgCtx.moveTo(0, h * 0.75);
     bgCtx.lineTo(w * 0.35, h * 0.55);
@@ -192,7 +211,7 @@ function drawJapaneseBackground() {
     bgCtx.fill();
 
     function drawPagoda(pX, pY) {
-        bgCtx.fillStyle = isLight ? "#475569" : "#090d16";
+        bgCtx.fillStyle = bg.pagoda;
         bgCtx.fillRect(pX - 16, pY - 25, 32, 25);
         bgCtx.beginPath();
         bgCtx.moveTo(pX - 35, pY);
@@ -268,13 +287,7 @@ function drawJapaneseBackground() {
                 if (pathStarted) bgCtx.stroke();
                 bgCtx.beginPath();
                 bgCtx.lineWidth = wthick;
-                bgCtx.strokeStyle = isLight
-                    ? t.scale < 0.8
-                        ? "#94a3b8"
-                        : "#334155"
-                    : t.scale < 0.8
-                      ? "#1e293b"
-                      : "#0f172a";
+                bgCtx.strokeStyle = t.scale < 0.8 ? bg.treeDim : bg.treeStrong;
                 prevW = wthick;
                 pathStarted = true;
             }
@@ -283,7 +296,7 @@ function drawJapaneseBackground() {
         }
         if (pathStarted) bgCtx.stroke();
 
-        bgCtx.fillStyle = isLight ? "rgba(244, 114, 182, 0.85)" : "rgba(244, 114, 182, 0.7)";
+        bgCtx.fillStyle = bg.blossom;
         bgCtx.beginPath();
         const dotR = Math.max(2.5, 5 * t.scale);
         for (let i = 0; i < n; i++) {
@@ -296,7 +309,7 @@ function drawJapaneseBackground() {
         bgCtx.fill();
     });
 
-    bgCtx.fillStyle = isLight ? "#ec4899" : "#f472b6";
+    bgCtx.fillStyle = bg.leaf;
     fallingLeaves.forEach((leaf) => {
         leaf.x += effectiveWind * 1.5 + Math.sin(leaf.angle) * 0.8;
         leaf.y += leaf.speedY + Math.abs(effectiveWind) * 0.1;

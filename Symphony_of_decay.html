@@ -21,6 +21,7 @@
         <div id="ui">
             <h1>Symphony of Decay</h1>
             <p id="instruction-mode" data-i18n="inst-default">Drag to move. Click on empty space to spawn.</p>
+            <p id="instruction-shortcuts" style="font-size: 11px; opacity: 0.75; margin: 2px 0 0 0"></p>
             <div id="score-box">
                 <span data-i18n="harmony">Harmony</span>: <span id="score" style="color: #2ed573">0</span>
             </div>
@@ -69,6 +70,7 @@
                 <button class="special-btn" onclick="copySelection()" data-i18n="sel-copy">📋 Copy</button>
                 <button class="special-btn" onclick="pasteSelection()" data-i18n="sel-paste">📥 Paste</button>
                 <button class="special-btn" onclick="mirrorSelection('x')" data-i18n="sel-mirror">🪞 Mirror</button>
+                <button class="special-btn" id="btn-snap-grid" onclick="toggleSnapGrid()" data-i18n="tool-snap-grid">▦ Grid</button>
             </div>
 
             <details class="accordion" open>
@@ -168,15 +170,15 @@
                     <div class="tool-group">
                         <label
                             ><span data-i18n="air-drag">Physics - Air Drag</span>:
-                            <span id="val-drag" class="slider-val">0.02</span></label
+                            <span id="val-drag" class="slider-val">0.2</span></label
                         >
                         <input
                             type="range"
                             id="slider-drag"
                             min="0"
-                            max="0.1"
+                            max="0.3"
                             step="0.001"
-                            value="0.02"
+                            value="0.2"
                             oninput="updatePhysics()" />
                     </div>
 
@@ -217,6 +219,12 @@
             <details class="accordion">
                 <summary data-i18n="accordion-audio">🔊 Audio</summary>
                 <div class="accordion-body">
+                    <div class="tool-group" style="display: flex; justify-content: space-between; align-items: center">
+                        <label style="margin: 0" data-i18n="record-label">Record Session (WAV)</label>
+                        <button class="action-btn special-btn" id="btn-record" onclick="toggleRecording()" data-i18n="record-start">⏺️ Record</button>
+                    </div>
+                    <canvas id="viz-canvas" width="260" height="120" style="width: 100%; display: block; margin-bottom: 8px; border-radius: 6px"></canvas>
+
                     <div class="tool-group">
                         <label data-i18n="timbre-label">Timbre / Sound Type:</label>
                         <select id="timbre-select" class="scene-select" onchange="setTimbreMode(this.value)"></select>
@@ -517,14 +525,27 @@
                 <div class="accordion-body">
                     <div class="tool-group">
                         <label style="margin: 0" data-i18n="select-object">Select Object</label>
-                        <button class="sub-btn" id="theme-toggle" style="width: 100%" onclick="toggleTheme()" data-i18n="btn-theme">
-                            🌓 Theme
-                        </button>
+                        <label style="margin: 6px 0 2px 0" data-i18n="theme-label">Theme:</label>
+                        <select id="theme-select" class="scene-select" onchange="setTheme(this.value)">
+                            <option value="dark" data-i18n="theme-dark">🌑 Dark</option>
+                            <option value="light" data-i18n="theme-light">☀️ Light</option>
+                            <option value="cyberpunk" data-i18n="theme-cyberpunk">🤖 Cyberpunk</option>
+                            <option value="synthwave" data-i18n="theme-synthwave">🌅 Synthwave</option>
+                            <option value="matrix" data-i18n="theme-matrix">🟩 Matrix</option>
+                            <option value="sunset" data-i18n="theme-sunset">🌇 Sunset</option>
+                            <option value="forest" data-i18n="theme-forest">🌲 Forest</option>
+                            <option value="candy" data-i18n="theme-candy">🍬 Candy</option>
+                        </select>
                     </div>
                     <div class="tool-group" style="display: flex; justify-content: space-between; align-items: center">
                         <label style="margin: 0" data-i18n="trail-label">Visual - Motion Trail</label>
                         <input type="checkbox" id="chk-trail" onchange="setTrailEnabled(this.checked)" />
                     </div>
+                    <div class="tool-group" style="display: flex; justify-content: space-between; align-items: center">
+                        <label style="margin: 0" data-i18n="bloom-label">Bloom / Glow</label>
+                        <input type="checkbox" id="chk-bloom" onchange="setBloomEnabled(this.checked)" />
+                    </div>
+                    <button class="sub-btn" style="width: 100%" onclick="screenshotCanvas()" data-i18n="screenshot-btn">📸 Save Screenshot (PNG)</button>
                 </div>
             </details>
 
