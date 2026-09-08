@@ -62,6 +62,14 @@
                 </button>
                 <button class="action-btn primary" onclick="triggerDecay()" data-i18n="btn-glitch">⚡ GLITCH</button>
             </div>
+            <div class="select-tools">
+                <button class="special-btn" id="btn-select" onclick="setMode('select')" data-i18n="tool-select">
+                    🖱️ Select
+                </button>
+                <button class="special-btn" onclick="copySelection()" data-i18n="sel-copy">📋 Copy</button>
+                <button class="special-btn" onclick="pasteSelection()" data-i18n="sel-paste">📥 Paste</button>
+                <button class="special-btn" onclick="mirrorSelection('x')" data-i18n="sel-mirror">🪞 Mirror</button>
+            </div>
 
             <details class="accordion" open>
                 <summary data-i18n="accordion-objects">🧩 Spawnable Objects</summary>

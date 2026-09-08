@@ -109,6 +109,109 @@ function serializeScene() {
     };
 }
 
+function createBodyFromSerialized(bd) {
+    const body = bd.isStatic
+        ? world.createBody({ type: "static", position: planck.Vec2(bd.x, bd.y), angle: bd.angle })
+        : world.createDynamicBody({ position: planck.Vec2(bd.x, bd.y), angle: bd.angle });
+
+    bd.fixtures.forEach((fd) => {
+        const shape =
+            fd.shapeType === "circle"
+                ? planck.Circle(fd.radius)
+                : planck.Polygon(fd.vertices.map((v) => planck.Vec2(v.x, v.y)));
+        body.createFixture(shape, {
+            density: fd.density,
+            friction: fd.friction,
+            restitution: fd.restitution,
+            filterCategoryBits: fd.filterCategoryBits,
+            filterMaskBits: fd.filterMaskBits
+        });
+    });
+
+    body.setLinearDamping(bd.linearDamping);
+    if (bd.soundType) body.soundType = bd.soundType;
+    if (bd.renderColor) body.renderColor = bd.renderColor;
+    if (bd.ropeId) body.ropeId = bd.ropeId;
+    if (bd.wallHalfW) {
+        body.wallHalfW = bd.wallHalfW;
+        body.wallHalfH = bd.wallHalfH;
+    }
+    if (bd.isEmitter) {
+        body.isEmitter = true;
+        body.emitterHalfW = bd.emitterHalfW;
+        body.emitterHalfH = bd.emitterHalfH;
+        body.emitterObjectType = bd.emitterObjectType || "bass";
+        body.emitterPower = bd.emitterPower || 12;
+        body.emitterBPM = bd.emitterBPM || 90;
+        body.emitterLifetime = bd.emitterLifetime !== null && bd.emitterLifetime !== undefined ? bd.emitterLifetime : 8;
+        body.emitterPaused = bd.emitterPaused || false;
+        body.emitterSyncEnabled = bd.emitterSyncEnabled || false;
+        body.emitterSyncDivision = bd.emitterSyncDivision || 1;
+        body.emitterSwing = typeof bd.emitterSwing === "number" ? bd.emitterSwing : 0;
+        if (Array.isArray(bd.emitterPattern) && bd.emitterPattern.length > 0) {
+            body.emitterPattern = bd.emitterPattern.map((s) => {
+                if (!s) return null;
+                if (typeof s === "string") return { t: (s && blockConfigs[s]) ? s : null, v: 1 };
+                return s && s.t && blockConfigs[s.t] ? { t: s.t, v: typeof s.v === "number" ? s.v : 1 } : null;
+            });
+        } else {
+            body.emitterPattern = new Array(DEFAULT_PATTERN_LENGTH).fill(null);
+        }
+        body.emitterPatternIndex = bd.emitterPatternIndex || 0;
+        if (Array.isArray(bd.emitterPatternBanks) && bd.emitterPatternBanks.length > 0) {
+            body.emitterPatternBanks = bd.emitterPatternBanks.map((bank) =>
+                Array.isArray(bank)
+                    ? bank.map((s) => {
+                          if (!s) return null;
+                          if (typeof s === "string") return { t: (s && blockConfigs[s]) ? s : null, v: 1 };
+                          return s && s.t && blockConfigs[s.t] ? { t: s.t, v: typeof s.v === "number" ? s.v : 1 } : null;
+                      })
+                    : new Array(DEFAULT_PATTERN_LENGTH).fill(null)
+            );
+        } else {
+            ensurePatternBanks(body);
+        }
+        body.emitterActiveBank = typeof bd.emitterActiveBank === "number" ? Math.max(0, Math.min(bd.emitterActiveBank, body.emitterPatternBanks.length - 1)) : 0;
+        body.emitterPattern = (body.emitterPatternBanks[body.emitterActiveBank] || new Array(DEFAULT_PATTERN_LENGTH).fill(null)).map(normalizeStep);
+        body.emitterChainEnabled = bd.emitterChainEnabled || false;
+        body.emitterChainPlayingBank = bd.emitterChainPlayingBank || 0;
+        body.emitterNextFireMs = Date.now() + 60000 / body.emitterBPM;
+        if (body.emitterSyncEnabled) alignEmitterToGrid(body);
+    }
+    if (bd.remainingLifespanMs !== null && bd.remainingLifespanMs !== undefined) {
+        body.lifespanMs = bd.remainingLifespanMs;
+        body.spawnedAtMs = Date.now();
+    }
+    return body;
+}
+
+function createJointFromSerialized(jd, bodyA, bodyB, ropeMap) {
+    let joint = null;
+    if (jd.type === "distance-joint") {
+        joint = world.createJoint(
+            planck.DistanceJoint({
+                bodyA,
+                bodyB,
+                localAnchorA: planck.Vec2(jd.localAnchorA.x, jd.localAnchorA.y),
+                localAnchorB: planck.Vec2(jd.localAnchorB.x, jd.localAnchorB.y),
+                length: jd.length,
+                frequencyHz: jd.frequencyHz,
+                dampingRatio: jd.dampingRatio
+            })
+        );
+    } else if (jd.type === "revolute-joint") {
+        const worldAnchor = bodyA.getWorldPoint(planck.Vec2(jd.localAnchorA.x, jd.localAnchorA.y));
+        joint = world.createJoint(planck.RevoluteJoint({}, bodyA, bodyB, worldAnchor));
+    }
+    if (!joint) return joint;
+    if (jd.ropeId) joint.ropeId = (ropeMap && ropeMap.get(jd.ropeId)) || jd.ropeId;
+    if (jd.isRopeDistanceJoint) joint.isRopeDistanceJoint = true;
+    if (jd.isCustomRender) joint.isCustomRender = true;
+    if (jd.renderColor) joint.renderColor = jd.renderColor;
+    if (jd.renderWidth) joint.renderWidth = jd.renderWidth;
+    return joint;
+}
+
 function deserializeScene(data) {
     clearScene();
 
@@ -125,105 +228,14 @@ function deserializeScene(data) {
         if (valEl) valEl.innerText = Math.round(globalClockBpm);
     }
 
-    const bodies = data.bodies.map((bd) => {
-        const body = bd.isStatic
-            ? world.createBody({ type: "static", position: planck.Vec2(bd.x, bd.y), angle: bd.angle })
-            : world.createDynamicBody({ position: planck.Vec2(bd.x, bd.y), angle: bd.angle });
-
-        bd.fixtures.forEach((fd) => {
-            const shape =
-                fd.shapeType === "circle"
-                    ? planck.Circle(fd.radius)
-                    : planck.Polygon(fd.vertices.map((v) => planck.Vec2(v.x, v.y)));
-            body.createFixture(shape, {
-                density: fd.density,
-                friction: fd.friction,
-                restitution: fd.restitution,
-                filterCategoryBits: fd.filterCategoryBits,
-                filterMaskBits: fd.filterMaskBits
-            });
-        });
-
-        body.setLinearDamping(bd.linearDamping);
-        if (bd.soundType) body.soundType = bd.soundType;
-        if (bd.renderColor) body.renderColor = bd.renderColor;
-        if (bd.ropeId) body.ropeId = bd.ropeId;
-        if (bd.wallHalfW) {
-            body.wallHalfW = bd.wallHalfW;
-            body.wallHalfH = bd.wallHalfH;
-        }
-        if (bd.isEmitter) {
-            body.isEmitter = true;
-            body.emitterHalfW = bd.emitterHalfW;
-            body.emitterHalfH = bd.emitterHalfH;
-            body.emitterObjectType = bd.emitterObjectType || "bass";
-            body.emitterPower = bd.emitterPower || 12;
-            body.emitterBPM = bd.emitterBPM || 90;
-            body.emitterLifetime = bd.emitterLifetime !== null && bd.emitterLifetime !== undefined ? bd.emitterLifetime : 8;
-            body.emitterPaused = bd.emitterPaused || false;
-            body.emitterSyncEnabled = bd.emitterSyncEnabled || false;
-            body.emitterSyncDivision = bd.emitterSyncDivision || 1;
-            body.emitterSwing = typeof bd.emitterSwing === "number" ? bd.emitterSwing : 0;
-            if (Array.isArray(bd.emitterPattern) && bd.emitterPattern.length > 0) {
-                body.emitterPattern = bd.emitterPattern.map((s) => {
-                    if (!s) return null;
-                    if (typeof s === "string") return { t: (s && blockConfigs[s]) ? s : null, v: 1 };
-                    return s && s.t && blockConfigs[s.t] ? { t: s.t, v: typeof s.v === "number" ? s.v : 1 } : null;
-                });
-            } else {
-                body.emitterPattern = new Array(DEFAULT_PATTERN_LENGTH).fill(null);
-            }
-            body.emitterPatternIndex = bd.emitterPatternIndex || 0;
-            if (Array.isArray(bd.emitterPatternBanks) && bd.emitterPatternBanks.length > 0) {
-                body.emitterPatternBanks = bd.emitterPatternBanks.map((bank) =>
-                    Array.isArray(bank)
-                        ? bank.map((s) => {
-                              if (!s) return null;
-                              if (typeof s === "string") return { t: (s && blockConfigs[s]) ? s : null, v: 1 };
-                              return s && s.t && blockConfigs[s.t] ? { t: s.t, v: typeof s.v === "number" ? s.v : 1 } : null;
-                          })
-                        : new Array(DEFAULT_PATTERN_LENGTH).fill(null)
-                );
-            } else {
-                ensurePatternBanks(body);
-            }
-            body.emitterActiveBank = typeof bd.emitterActiveBank === "number" ? Math.max(0, Math.min(bd.emitterActiveBank, body.emitterPatternBanks.length - 1)) : 0;
-            body.emitterPattern = (body.emitterPatternBanks[body.emitterActiveBank] || new Array(DEFAULT_PATTERN_LENGTH).fill(null)).map(normalizeStep);
-            body.emitterChainEnabled = bd.emitterChainEnabled || false;
-            body.emitterChainPlayingBank = bd.emitterChainPlayingBank || 0;
-            // Ricalcolato da "ora": il timestamp precedente non ha più senso dopo un caricamento/undo.
-            body.emitterNextFireMs = Date.now() + 60000 / body.emitterBPM;
-            if (body.emitterSyncEnabled) alignEmitterToGrid(body);
-        }
-        if (bd.remainingLifespanMs !== null && bd.remainingLifespanMs !== undefined) {
-            body.lifespanMs = bd.remainingLifespanMs;
-            body.spawnedAtMs = Date.now();
-        }
-        return body;
-    });
+    const bodies = data.bodies.map((bd) => createBodyFromSerialized(bd));
 
     data.joints.forEach((jd) => {
         const bodyA = bodies[jd.bodyA];
         const bodyB = bodies[jd.bodyB];
         if (!bodyA || !bodyB) return;
 
-        let joint = null;
-        if (jd.type === "distance-joint") {
-            joint = world.createJoint(
-                planck.DistanceJoint({
-                    bodyA,
-                    bodyB,
-                    localAnchorA: planck.Vec2(jd.localAnchorA.x, jd.localAnchorA.y),
-                    localAnchorB: planck.Vec2(jd.localAnchorB.x, jd.localAnchorB.y),
-                    length: jd.length,
-                    frequencyHz: jd.frequencyHz,
-                    dampingRatio: jd.dampingRatio
-                })
-            );
-        } else if (jd.type === "revolute-joint") {
-            const worldAnchor = bodyA.getWorldPoint(planck.Vec2(jd.localAnchorA.x, jd.localAnchorA.y));
-            joint = world.createJoint(planck.RevoluteJoint({}, bodyA, bodyB, worldAnchor));
-        }
+        const joint = createJointFromSerialized(jd, bodyA, bodyB, null);
         if (!joint) return;
 
         if (jd.ropeId) joint.ropeId = jd.ropeId;
@@ -242,6 +254,8 @@ function deserializeScene(data) {
         document.getElementById("slider-turbulence").value = data.physics.turbulence;
         updatePhysics();
     }
+
+    realignAllSyncedEmitters();
 }
 
 // --- Undo / Redo ---

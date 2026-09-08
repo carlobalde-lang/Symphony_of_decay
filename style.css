@@ -535,6 +535,12 @@
                 gap: 5px;
                 margin-top: 2px;
             }
+            .select-tools {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 5px;
+                margin-top: 6px;
+            }
             .special-btn {
                 background: var(--btn-bg);
                 border: 2px solid var(--border-color);

@@ -26,6 +26,15 @@ const TRANSLATIONS = {
         "tool-chain": "⛓️ Rigid Chain",
         "tool-bar": "🔗 Bar",
         "tool-eraser": "🧹 Eraser",
+        "tool-select": "🖱️ Select",
+        "sel-copy": "📋 Copy",
+        "sel-paste": "📥 Paste",
+        "sel-mirror": "🪞 Mirror",
+        "sel-copied": "📋 Copied selection",
+        "sel-pasted": "📥 Pasted selection",
+        "sel-mirrored": "🪞 Selection mirrored",
+        "sel-deleted": "🗑️ Selection deleted",
+        "sel-count": "{n} selected",
         "accordion-objects": "🧩 Spawnable Objects",
         "category-shapes": "🔷 Shapes",
         "category-notes": "🎵 Musical Notes",
@@ -59,6 +68,8 @@ const TRANSLATIONS = {
         "inst-rope": "Rope Mode: Click first point, then second point.",
         "inst-chain": "Rigid Chain Mode: Click first point, then second point.",
         "inst-eraser": "Eraser Mode: Click an object, bar, or rope to delete it.",
+        "inst-select":
+            "Select Mode: click an object to select it, Shift+click to add/remove, drag an empty area to draw a selection box. Drag selected objects to move them. Ctrl+C / Ctrl+V to copy & paste, Ctrl+M / Ctrl+Shift+M to mirror, Delete to remove.",
         "limit-reached": "⚠️ Limit of {max} objects reached: delete something before continuing",
         "no-scenes": "(no saved scenes)",
         "block-emitter": "🎯 Emitter",
@@ -137,6 +148,15 @@ const TRANSLATIONS = {
         "tool-chain": "⛓️ Catena Rigida",
         "tool-bar": "🔗 Barra",
         "tool-eraser": "🧹 Gomma",
+        "tool-select": "🖱️ Selezione",
+        "sel-copy": "📋 Copia",
+        "sel-paste": "📥 Incolla",
+        "sel-mirror": "🪞 Specchia",
+        "sel-copied": "📋 Selezione copiata",
+        "sel-pasted": "📥 Selezione incollata",
+        "sel-mirrored": "🪞 Selezione specchiata",
+        "sel-deleted": "🗑️ Selezione eliminata",
+        "sel-count": "{n} selezionati",
         "accordion-objects": "🧩 Oggetti Spawnabili",
         "category-shapes": "🔷 Forme",
         "category-notes": "🎵 Note Musicali",
@@ -170,6 +190,8 @@ const TRANSLATIONS = {
         "inst-rope": "Modo Corda: Clicca sul primo punto e poi sul secondo.",
         "inst-chain": "Modo Catena Rigida: Clicca sul primo punto e poi sul secondo.",
         "inst-eraser": "Modo Gomma: Clicca un oggetto, una barra o una corda per cancellarla.",
+        "inst-select":
+            "Modo Selezione: clicca un oggetto per selezionarlo, Maiusc+clic per aggiungerlo/toglierlo, trascina su uno spazio vuoto per disegnare una cornice di selezione. Trascina gli oggetti selezionati per spostarli. Ctrl+C / Ctrl+V per copia e incolla, Ctrl+M / Ctrl+Maiusc+M per specchiare, Canc per eliminare.",
         "limit-reached": "⚠️ Limite di {max} oggetti raggiunto: cancella qualcosa prima di continuare",
         "no-scenes": "(nessuna scena salvata)",
         "block-emitter": "🎯 Emettitore",
@@ -282,6 +304,8 @@ function updateInstructionText() {
         el.innerText = t("inst-chain");
     } else if (currentMode === "eraser") {
         el.innerText = t("inst-eraser");
+    } else if (currentMode === "select") {
+        el.innerText = t("inst-select");
     }
 }
 

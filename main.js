@@ -7,6 +7,39 @@ function setTrailEnabled(enabled) {
     trailEnabled = enabled;
 }
 
+function drawSelectionOverlay() {
+    const isLight = document.body.classList.contains("light-theme");
+    const highlight = isLight ? "#0066ff" : "#4dc3ff";
+    for (const b of selectedBodies) {
+        const bounds = getBodyWorldBounds(b);
+        if (!bounds) continue;
+        const x = bounds.minX * SCALE;
+        const y = bounds.minY * SCALE;
+        const w = (bounds.maxX - bounds.minX) * SCALE;
+        const h = (bounds.maxY - bounds.minY) * SCALE;
+        ctx.save();
+        ctx.strokeStyle = highlight;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.strokeRect(x - 3, y - 3, w + 6, h + 6);
+        ctx.restore();
+    }
+    if (marqueeState) {
+        const x = Math.min(marqueeState.startX, marqueeState.endX) * SCALE;
+        const y = Math.min(marqueeState.startY, marqueeState.endY) * SCALE;
+        const w = Math.abs(marqueeState.endX - marqueeState.startX) * SCALE;
+        const h = Math.abs(marqueeState.endY - marqueeState.startY) * SCALE;
+        ctx.save();
+        ctx.fillStyle = highlight + "22";
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeStyle = highlight;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 4]);
+        ctx.strokeRect(x, y, w, h);
+        ctx.restore();
+    }
+}
+
 function gameLoop() {
     updatePerformanceAdaptiveLimit(performance.now());
 
@@ -138,6 +171,8 @@ function gameLoop() {
         }
     }
 
+    drawSelectionOverlay();
+
     if (linkStartBody && (currentMode === "rope" || currentMode === "chain" || currentMode === "bar")) {
         const startWorldPoint = linkStartBody.getWorldPoint(linkStartPoint);
         ctx.save();
@@ -239,16 +274,52 @@ if (maxBodyEl) maxBodyEl.innerText = MAX_BODIES;
 updateEffects();
 updateUndoRedoButtons();
 
-// Scorciatoie da tastiera per Undo / Redo
+// Scorciatoie da tastiera
 window.addEventListener("keydown", (e) => {
-    if (!(e.ctrlKey || e.metaKey)) return;
+    const target = e.target;
+    const tag = target && target.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+    const ctrl = e.ctrlKey || e.metaKey;
     const key = e.key.toLowerCase();
-    if (key === "z" && !e.shiftKey) {
+
+    if (ctrl && key === "z" && !e.shiftKey) {
         e.preventDefault();
         undoAction();
-    } else if (key === "y" || (key === "z" && e.shiftKey)) {
+        return;
+    }
+    if (ctrl && (key === "y" || (key === "z" && e.shiftKey))) {
         e.preventDefault();
         redoAction();
+        return;
+    }
+
+    if (currentMode === "select") {
+        if (ctrl && key === "c") {
+            e.preventDefault();
+            copySelection();
+            return;
+        }
+        if (ctrl && key === "v") {
+            e.preventDefault();
+            pasteSelection();
+            return;
+        }
+        if (ctrl && key === "m") {
+            e.preventDefault();
+            mirrorSelection(e.shiftKey ? "y" : "x");
+            return;
+        }
+        if ((e.key === "Delete" || e.key === "Backspace") && !ctrl) {
+            e.preventDefault();
+            deleteSelectedBodies();
+            return;
+        }
+        if (e.key === "Escape") {
+            e.preventDefault();
+            clearSelection();
+            return;
+        }
     }
 });
 

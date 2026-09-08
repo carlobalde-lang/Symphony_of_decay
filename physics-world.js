@@ -241,6 +241,10 @@ let mouseJoint = null;
 let mouseBody = world.createBody();
 
 canvas.addEventListener("pointerdown", (event) => {
+    if (event.button === 2) {
+        deselectAllActive();
+        return;
+    }
     const clientX = event.clientX;
     const clientY = event.clientY;
 
@@ -273,6 +277,7 @@ canvas.addEventListener("pointerdown", (event) => {
     }
 
     const mousePos = planck.Vec2(clientX / SCALE, clientY / SCALE);
+    _lastPointerWorld = planck.Vec2(mousePos.x, mousePos.y);
     let clickedBody = null;
     for (let b = world.getBodyList(); b; b = b.getNext()) {
         if (b.isWall) continue;
@@ -283,6 +288,11 @@ canvas.addEventListener("pointerdown", (event) => {
             }
         }
         if (clickedBody) break;
+    }
+
+    if (currentMode === "select") {
+        handleSelectPointerDown(mousePos, clickedBody, event.shiftKey);
+        return;
     }
 
     if (editingWallBody) {
@@ -709,9 +719,25 @@ function resizeWall(body, side, mouseWorldPos) {
     body.wallHalfH = halfH;
 }
 
+window.addEventListener("contextmenu", (event) => {
+    if (event.target === canvas || event.target === document.body || event.target === canvas.parentElement) event.preventDefault();
+    deselectAllActive();
+});
+
 canvas.addEventListener("pointermove", (event) => {
     const mousePos = planck.Vec2(event.clientX / SCALE, event.clientY / SCALE);
+    _lastPointerWorld = planck.Vec2(mousePos.x, mousePos.y);
     if (mouseJoint) mouseJoint.setTarget(mousePos);
+
+    if (selectionDrag) {
+        updateSelectionDrag(mousePos);
+        return;
+    }
+
+    if (marqueeState) {
+        updateMarquee(mousePos);
+        return;
+    }
 
     if (isDraggingWall && editingWallBody) {
         editingWallBody.setPosition(planck.Vec2(mousePos.x + wallDragOffset.x, mousePos.y + wallDragOffset.y));
@@ -736,6 +762,8 @@ window.addEventListener("pointerup", () => {
     }
     resizingWallHandle = null;
     isDraggingWall = false;
+    endSelectionDrag();
+    finalizeMarquee();
 });
 
 canvas.addEventListener(

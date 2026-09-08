@@ -25,6 +25,13 @@ let lastTapTime = 0;
 let lastTapBody = null;
 const DOUBLE_TAP_MS = 350;
 
+// --- Stato strumento di selezione ---
+let selectedBodies = new Set();      // body attualmente selezionati
+let selectionDrag = null;            // { startMouse, startPositions: Map<body, {x,y}> }
+let marqueeState = null;             // { startX, startY, endX, endY } in coordinate mondo
+let _selectionClipboard = null;      // snapshot serializzato per il copia/incolla
+let _lastPointerWorld = null;        // ultima posizione puntatore in coordinate mondo
+
 function toggleToolbox(event) {
     if (event) event.stopPropagation();
     document.getElementById("toolbox").classList.toggle("collapsed");
@@ -52,7 +59,8 @@ function updateCursor() {
         bar: "crosshair",
         rope: "crosshair",
         chain: "crosshair",
-        eraser: "cell"
+        eraser: "cell",
+        select: "pointer"
     };
     canvas.style.cursor = cursors[currentMode] || "default";
 }
@@ -247,6 +255,377 @@ function spawnElement(x, y, typeKey) {
     return body;
 }
 
+// --- Strumento di selezione ---
+
+function getBodyWorldBounds(body) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (let f = body.getFixtureList(); f; f = f.getNext()) {
+        const shape = f.getShape();
+        if (f.getType() === "circle") {
+            const r = shape.m_radius;
+            const c = body.getWorldPoint(planck.Vec2(0, 0));
+            minX = Math.min(minX, c.x - r);
+            maxX = Math.max(maxX, c.x + r);
+            minY = Math.min(minY, c.y - r);
+            maxY = Math.max(maxY, c.y + r);
+        } else {
+            const verts = shape.m_vertices || [];
+            for (const v of verts) {
+                const p = body.getWorldPoint(planck.Vec2(v.x, v.y));
+                minX = Math.min(minX, p.x);
+                maxX = Math.max(maxX, p.x);
+                minY = Math.min(minY, p.y);
+                maxY = Math.max(maxY, p.y);
+            }
+        }
+    }
+    if (minX === Infinity) return null;
+    return { minX, minY, maxX, maxY };
+}
+
+// Una corda/catena è un unico "oggetto logico": selezionarla intera.
+function getSelectionGroupForBody(body) {
+    if (body && body.ropeId !== undefined) {
+        const group = [];
+        for (let b = world.getBodyList(); b; b = b.getNext()) {
+            if (b.ropeId === body.ropeId) group.push(b);
+        }
+        if (group.length) return group;
+    }
+    return [body];
+}
+
+function clearSelection() {
+    selectedBodies.clear();
+    selectionDrag = null;
+    marqueeState = null;
+}
+
+// Tasto destro: deseleziona qualsiasi cosa sia attiva o selezionata.
+function deselectAllActive() {
+    clearSelection();
+    linkStartBody = null;
+    linkStartPoint = null;
+    if (currentEmitterPanelBody) {
+        currentEmitterPanelBody = null;
+        closeEmitterPanel();
+    }
+    if (editingWallBody) {
+        editingWallBody = null;
+        resizingWallHandle = null;
+        isDraggingWall = false;
+    }
+    currentMode = "none";
+    document.querySelectorAll(".block-btn").forEach((btn) => btn.classList.remove("active"));
+    document.querySelectorAll(".special-btn").forEach((btn) => btn.classList.remove("active"));
+    updateCursor();
+    updateInstructionText();
+}
+
+function handleSelectPointerDown(mousePos, clickedBody, shiftKey) {
+    if (clickedBody) {
+        const group = getSelectionGroupForBody(clickedBody);
+        const allSelected = group.every((b) => selectedBodies.has(b));
+        if (shiftKey) {
+            group.forEach((b) => {
+                if (selectedBodies.has(b)) selectedBodies.delete(b);
+                else selectedBodies.add(b);
+            });
+            return;
+        }
+        if (!allSelected) {
+            selectedBodies.clear();
+            group.forEach((b) => selectedBodies.add(b));
+        }
+        beginSelectionDrag(mousePos);
+    } else {
+        if (!shiftKey) clearSelection();
+        marqueeState = { startX: mousePos.x, startY: mousePos.y, endX: mousePos.x, endY: mousePos.y, additive: shiftKey };
+    }
+}
+
+function beginSelectionDrag(mousePos) {
+    const startPositions = new Map();
+    for (const b of selectedBodies) {
+        const p = b.getPosition();
+        startPositions.set(b, { x: p.x, y: p.y });
+    }
+    selectionDrag = { startMouse: { x: mousePos.x, y: mousePos.y }, startPositions };
+}
+
+function updateSelectionDrag(mousePos) {
+    if (!selectionDrag) return;
+    const dx = mousePos.x - selectionDrag.startMouse.x;
+    const dy = mousePos.y - selectionDrag.startMouse.y;
+    for (const [b, start] of selectionDrag.startPositions) {
+        b.setPosition(planck.Vec2(start.x + dx, start.y + dy));
+        b.setLinearVelocity(planck.Vec2(0, 0));
+        b.setAngularVelocity(0);
+    }
+}
+
+function endSelectionDrag() {
+    selectionDrag = null;
+}
+
+function updateMarquee(mousePos) {
+    if (marqueeState) {
+        marqueeState.endX = mousePos.x;
+        marqueeState.endY = mousePos.y;
+    }
+}
+
+function finalizeMarquee() {
+    if (!marqueeState) return;
+    const minX = Math.min(marqueeState.startX, marqueeState.endX);
+    const maxX = Math.max(marqueeState.startX, marqueeState.endX);
+    const minY = Math.min(marqueeState.startY, marqueeState.endY);
+    const maxY = Math.max(marqueeState.startY, marqueeState.endY);
+    const additive = marqueeState.additive;
+    marqueeState = null;
+
+    if (maxX - minX < 0.01 && maxY - minY < 0.01) return;
+
+    const toAdd = new Set();
+    for (let b = world.getBodyList(); b; b = b.getNext()) {
+        if (b.isWall) continue;
+        const bounds = getBodyWorldBounds(b);
+        if (!bounds) continue;
+        if (bounds.maxX < minX || bounds.minX > maxX) continue;
+        if (bounds.maxY < minY || bounds.minY > maxY) continue;
+        const group = getSelectionGroupForBody(b);
+        group.forEach((g) => toAdd.add(g));
+    }
+    if (!additive) clearSelection();
+    toAdd.forEach((b) => selectedBodies.add(b));
+    flashMessage(t("sel-count").replace("{n}", selectedBodies.size), "#00d2ff");
+}
+
+// --- Copia / Incolla / Specchia selezione ---
+
+function serializeBodyForClipboard(b) {
+    const fixtures = [];
+    for (let f = b.getFixtureList(); f; f = f.getNext()) {
+        const shape = f.getShape();
+        const fdata = {
+            density: f.getDensity(),
+            friction: f.getFriction(),
+            restitution: f.getRestitution(),
+            filterCategoryBits: f.getFilterCategoryBits(),
+            filterMaskBits: f.getFilterMaskBits()
+        };
+        if (f.getType() === "circle") {
+            fdata.shapeType = "circle";
+            fdata.radius = shape.getRadius ? shape.getRadius() : shape.m_radius;
+        } else {
+            fdata.shapeType = "polygon";
+            const verts = shape.m_vertices || shape.getVertices();
+            fdata.vertices = verts.map((v) => ({ x: v.x, y: v.y }));
+        }
+        fixtures.push(fdata);
+    }
+    const pos = b.getPosition();
+    return {
+        isStatic: b.isStatic(),
+        x: pos.x,
+        y: pos.y,
+        angle: b.getAngle(),
+        soundType: b.soundType || null,
+        renderColor: b.renderColor || null,
+        ropeId: b.ropeId || null,
+        wallHalfW: b.wallHalfW || null,
+        wallHalfH: b.wallHalfH || null,
+        isEmitter: b.isEmitter || false,
+        emitterHalfW: b.emitterHalfW || null,
+        emitterHalfH: b.emitterHalfH || null,
+        emitterObjectType: b.emitterObjectType || null,
+        emitterPower: b.emitterPower || null,
+        emitterBPM: b.emitterBPM || null,
+        emitterLifetime: b.emitterLifetime !== undefined ? b.emitterLifetime : null,
+        emitterPaused: b.emitterPaused || false,
+        emitterSyncEnabled: b.emitterSyncEnabled || false,
+        emitterSyncDivision: b.emitterSyncDivision || null,
+        emitterSwing: typeof b.emitterSwing === "number" ? b.emitterSwing : 0,
+        emitterPattern: Array.isArray(b.emitterPattern) ? b.emitterPattern.map((s) => s ? { ...s } : null) : null,
+        emitterPatternIndex: b.emitterPatternIndex || 0,
+        emitterPatternBanks: Array.isArray(b.emitterPatternBanks) && b.emitterPatternBanks.length
+            ? b.emitterPatternBanks.map((bank) => (Array.isArray(bank) ? bank.map((s) => s ? (typeof s === "string" ? s : { ...s }) : null) : null))
+            : null,
+        emitterActiveBank: typeof b.emitterActiveBank === "number" ? b.emitterActiveBank : 0,
+        emitterChainEnabled: b.emitterChainEnabled || false,
+        emitterChainPlayingBank: b.emitterChainPlayingBank || 0,
+        remainingLifespanMs: null,
+        linearDamping: b.getLinearDamping(),
+        fixtures
+    };
+}
+
+function serializeJointForClipboard(j, bodyIndex) {
+    const jdata = {
+        type: j.getType(),
+        bodyA: bodyIndex.get(j.getBodyA()),
+        bodyB: bodyIndex.get(j.getBodyB()),
+        localAnchorA: j.getLocalAnchorA ? { x: j.getLocalAnchorA().x, y: j.getLocalAnchorA().y } : null,
+        localAnchorB: j.getLocalAnchorB ? { x: j.getLocalAnchorB().x, y: j.getLocalAnchorB().y } : null,
+        ropeId: j.ropeId || null,
+        isRopeDistanceJoint: !!j.isRopeDistanceJoint,
+        isCustomRender: !!j.isCustomRender,
+        renderColor: j.renderColor || null,
+        renderWidth: j.renderWidth || null
+    };
+    if (j.getType() === "distance-joint") {
+        jdata.length = j.getLength();
+        jdata.frequencyHz = j.getFrequency();
+        jdata.dampingRatio = j.getDampingRatio();
+    }
+    return jdata;
+}
+
+function copySelection() {
+    if (selectedBodies.size === 0) return;
+    const bodyIndex = new Map();
+    const bodies = [];
+    let idx = 0;
+    for (let b = world.getBodyList(); b; b = b.getNext()) {
+        if (!selectedBodies.has(b)) continue;
+        bodyIndex.set(b, idx++);
+        bodies.push(serializeBodyForClipboard(b));
+    }
+    if (bodies.length === 0) return;
+    const joints = [];
+    for (let j = world.getJointList(); j; j = j.getNext()) {
+        if (!bodyIndex.has(j.getBodyA()) || !bodyIndex.has(j.getBodyB())) continue;
+        joints.push(serializeJointForClipboard(j, bodyIndex));
+    }
+    _selectionClipboard = { bodies, joints };
+    flashMessage(t("sel-copied"), "#00d2ff");
+}
+
+function pasteSelection() {
+    if (!_selectionClipboard || _selectionClipboard.bodies.length === 0) return;
+    if (getSpawnedBodyCount() + _selectionClipboard.bodies.length > MAX_BODIES) {
+        flashLimitWarning();
+        return;
+    }
+    const clip = _selectionClipboard;
+    let cx = 0, cy = 0;
+    for (const bd of clip.bodies) { cx += bd.x; cy += bd.y; }
+    cx /= clip.bodies.length;
+    cy /= clip.bodies.length;
+
+    const tx = _lastPointerWorld ? _lastPointerWorld.x : cx + 40 / SCALE;
+    const ty = _lastPointerWorld ? _lastPointerWorld.y : cy + 40 / SCALE;
+    const dx = tx - cx;
+    const dy = ty - cy;
+
+    saveUndoState();
+    const ropeMap = new Map();
+    const newBodies = clip.bodies.map((bd) => {
+        const copy = { ...bd, x: bd.x + dx, y: bd.y + dy };
+        if (copy.ropeId) {
+            if (!ropeMap.has(copy.ropeId)) ropeMap.set(copy.ropeId, ++ropeIdCounter);
+            copy.ropeId = ropeMap.get(copy.ropeId);
+        }
+        return createBodyFromSerialized(copy);
+    });
+    clip.joints.forEach((jd) => {
+        const bA = newBodies[jd.bodyA];
+        const bB = newBodies[jd.bodyB];
+        if (!bA || !bB) return;
+        createJointFromSerialized(jd, bA, bB, ropeMap);
+    });
+    selectedBodies.clear();
+    newBodies.forEach((b) => selectedBodies.add(b));
+    flashMessage(t("sel-pasted"), "#00d2ff");
+}
+
+function mirrorSelection(axis) {
+    if (selectedBodies.size === 0) return;
+    axis = axis || "x";
+
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const b of selectedBodies) {
+        const bounds = getBodyWorldBounds(b);
+        if (!bounds) continue;
+        minX = Math.min(minX, bounds.minX);
+        maxX = Math.max(maxX, bounds.maxX);
+        minY = Math.min(minY, bounds.minY);
+        maxY = Math.max(maxY, bounds.maxY);
+    }
+    if (minX === Infinity) return;
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+
+    saveUndoState();
+
+    // Cattura e distrugge i joint tra i selezionati: gli ancoraggi locali vanno specchiati.
+    const jointData = [];
+    let j = world.getJointList();
+    while (j) {
+        const next = j.getNext();
+        const bA = j.getBodyA();
+        const bB = j.getBodyB();
+        if (selectedBodies.has(bA) && selectedBodies.has(bB)) {
+            jointData.push(serializeJointForClipboard(j, new Map([[bA, 0], [bB, 1]])));
+            jointData[jointData.length - 1].bodyA = bA;
+            jointData[jointData.length - 1].bodyB = bB;
+            world.destroyJoint(j);
+        }
+        j = next;
+    }
+
+    for (const b of selectedBodies) {
+        const p = b.getPosition();
+        const a = b.getAngle();
+        let nx = p.x, ny = p.y, na = a;
+        if (axis === "x") { nx = 2 * centerX - p.x; na = -a; }
+        if (axis === "y") { ny = 2 * centerY - p.y; na = -a; }
+        b.setPosition(planck.Vec2(nx, ny));
+        b.setAngle(na);
+        b.setLinearVelocity(planck.Vec2(0, 0));
+        b.setAngularVelocity(0);
+    }
+
+    jointData.forEach((jd) => {
+        if (axis === "x") {
+            jd.localAnchorA = { x: -jd.localAnchorA.x, y: jd.localAnchorA.y };
+            jd.localAnchorB = { x: -jd.localAnchorB.x, y: jd.localAnchorB.y };
+        }
+        if (axis === "y") {
+            jd.localAnchorA = { x: jd.localAnchorA.x, y: -jd.localAnchorA.y };
+            jd.localAnchorB = { x: jd.localAnchorB.x, y: -jd.localAnchorB.y };
+        }
+        createJointFromSerialized(jd, jd.bodyA, jd.bodyB, null);
+    });
+    flashMessage(t("sel-mirrored"), "#00d2ff");
+}
+
+function deleteSelectedBodies() {
+    if (selectedBodies.size === 0) return;
+    saveUndoState();
+    const toDelete = new Set(selectedBodies);
+    let j = world.getJointList();
+    while (j) {
+        const next = j.getNext();
+        if (toDelete.has(j.getBodyA()) || toDelete.has(j.getBodyB())) world.destroyJoint(j);
+        j = next;
+    }
+    for (const b of [...toDelete]) {
+        if (b === editingWallBody) {
+            editingWallBody = null;
+            resizingWallHandle = null;
+            isDraggingWall = false;
+        }
+        if (currentEmitterPanelBody === b) {
+            closeEmitterPanel();
+            currentEmitterPanelBody = null;
+        }
+        world.destroyBody(b);
+    }
+    selectedBodies.clear();
+    flashMessage(t("sel-deleted"), "#ff4757");
+}
+
 // --- Particelle da impatto ---
 let impactParticles = [];
 const MAX_IMPACT_PARTICLES = 300;
@@ -388,6 +767,9 @@ function clearScene() {
     isDraggingWall = false;
     lastTapBody = null;
     lastTapTime = 0;
+    selectedBodies.clear();
+    selectionDrag = null;
+    marqueeState = null;
     clearScore();
 }
 
@@ -464,10 +846,14 @@ function updateEmitters() {
         if (b.emitterSyncEnabled) {
             const beatLenMs = 60000 / globalClockBpm;
             const gridMs = Math.max(EMITTER_MIN_INTERVAL_MS, b.emitterSyncDivision * beatLenMs);
-            const isOdd = b.emitterPatternIndex % 2 === 1;
             const swingOff = gridMs * swingPct * 0.5;
-            const actualGrid = isOdd ? gridMs + swingOff : gridMs - swingOff;
-            while (b.emitterNextFireMs <= now) b.emitterNextFireMs += Math.max(EMITTER_MIN_INTERVAL_MS, actualGrid);
+            let guard = 0;
+            while (b.emitterNextFireMs <= now && guard < 64) {
+                const tickIdx = Math.floor((b.emitterNextFireMs - globalClockOriginMs) / gridMs);
+                const swing = (tickIdx & 1) === 1 ? swingOff : -swingOff;
+                b.emitterNextFireMs += Math.max(EMITTER_MIN_INTERVAL_MS, gridMs + swing);
+                guard++;
+            }
         } else {
             const baseInterval = Math.max(EMITTER_MIN_INTERVAL_MS, 60000 / Math.max(1, b.emitterBPM));
             const isOdd = b.emitterPatternIndex % 2 === 1;
@@ -511,12 +897,11 @@ function updateEmitters() {
                 continue;
             }
         } else {
-            if (chainOn) {
-                // In catena, un banco vuoto non deve bloccare la sequenza: avanza comunque.
-                b.emitterPatternIndex = (b.emitterPatternIndex + 1) % Math.max(1, playingPattern.length);
-                if (b.emitterPatternIndex === 0) {
-                    b.emitterChainPlayingBank = ((b.emitterChainPlayingBank || 0) + 1) % banks.length;
-                }
+            // Anche senza note, l'indice avanza: mantiene coerenza parità/griglia e,
+            // in catena, consente di passare al banco successivo se questo è vuoto.
+            b.emitterPatternIndex = (b.emitterPatternIndex + 1) % Math.max(1, playingPattern.length);
+            if (chainOn && b.emitterPatternIndex === 0) {
+                b.emitterChainPlayingBank = ((b.emitterChainPlayingBank || 0) + 1) % banks.length;
             }
             spawnType = blockConfigs[b.emitterObjectType] ? b.emitterObjectType : "bass";
         }
