@@ -16,6 +16,7 @@
         <div id="top-center-controls">
             <button class="sub-btn" id="btn-undo" onclick="undoAction()" data-i18n="btn-undo">↩️ Undo</button>
             <button class="sub-btn" id="btn-redo" onclick="redoAction()" data-i18n="btn-redo">↪️ Redo</button>
+            <button class="sub-btn" id="btn-help" onclick="openHelp()" data-i18n="btn-help">❓ Help</button>
         </div>
 
         <div id="ui">
@@ -62,6 +63,7 @@
                     🧹 Eraser
                 </button>
                 <button class="action-btn primary" onclick="triggerDecay()" data-i18n="btn-glitch">⚡ GLITCH</button>
+                <button class="action-btn special-btn" onclick="openHelp()" data-i18n="btn-help">❓ Help</button>
             </div>
             <div class="select-tools">
                 <button class="special-btn" id="btn-select" onclick="setMode('select')" data-i18n="tool-select">
@@ -220,7 +222,7 @@
                 <summary data-i18n="accordion-audio">🔊 Audio</summary>
                 <div class="accordion-body">
                     <div class="tool-group" style="display: flex; justify-content: space-between; align-items: center">
-                        <label style="margin: 0" data-i18n="record-label">Record Session (WAV)</label>
+                        <label style="margin: 0" data-i18n="record-label">Record Session</label>
                         <button class="action-btn special-btn" id="btn-record" onclick="toggleRecording()" data-i18n="record-start">⏺️ Record</button>
                     </div>
                     <canvas id="viz-canvas" width="260" height="120" style="width: 100%; display: block; margin-bottom: 8px; border-radius: 6px"></canvas>
@@ -741,6 +743,16 @@
                     step="1"
                     value="8"
                     oninput="setEmitterLifetime(this.value)" />
+            </div>
+        </div>
+
+        <div id="help-modal" class="modal-overlay" style="display: none" onclick="if (event.target === this) closeHelp()">
+            <div class="modal-box">
+                <div class="modal-header">
+                    <span class="modal-title" data-i18n="help-title">❓ Help & Instructions</span>
+                    <button class="sub-btn" onclick="closeHelp()" data-i18n="btn-close-help">✕ Close</button>
+                </div>
+                <div class="modal-scroll" id="help-content"></div>
             </div>
         </div>
 

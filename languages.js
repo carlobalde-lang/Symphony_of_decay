@@ -55,11 +55,11 @@ const TRANSLATIONS = {
         "accordion-physics": "🌍 Physics",
         "accordion-audio": "🔊 Audio",
         "accordion-graphics": "🎨 Graphics",
-        "record-label": "Record Session (WAV)",
+        "record-label": "Record Session",
         "record-start": "⏺️ Record",
         "record-stop": "⏹️ Stop",
         "record-message-start": "🔴 Recording started",
-        "record-message-stop": "💾 Recording saved as WAV",
+        "record-message-stop": "💾 Recording saved",
         "snap-grid-label": "Snap to Grid",
         "bloom-label": "Bloom / Glow",
         "screenshot-btn": "📸 Save Screenshot (PNG)",
@@ -140,7 +140,10 @@ const TRANSLATIONS = {
         "emitter-vel-hint": "Click a filled step to cycle velocity (· soft ● mid ◉ loud). Drag across steps to paint multiple.",
         "emitter-preset-placeholder": "— Preset pattern —",
         "emitter-chain-label": "Chain",
-        "emitter-swing-label": "Swing"
+        "emitter-swing-label": "Swing",
+        "btn-help": "❓ Help",
+        "help-title": "❓ Help & Instructions",
+        "btn-close-help": "✕ Close"
     },
     it: {
         harmony: "Armonia",
@@ -196,11 +199,11 @@ const TRANSLATIONS = {
         "accordion-physics": "🌍 Fisica",
         "accordion-audio": "🔊 Audio",
         "accordion-graphics": "🎨 Grafica",
-        "record-label": "Registra sessione (WAV)",
+        "record-label": "Registra Sessione",
         "record-start": "⏺️ Registra",
         "record-stop": "⏹️ Ferma",
         "record-message-start": "🔴 Registrazione avviata",
-        "record-message-stop": "💾 Registrazione salvata come WAV",
+        "record-message-stop": "💾 Registrazione salvata",
         "snap-grid-label": "Snap alla griglia",
         "bloom-label": "Bloom / Bagliore",
         "screenshot-btn": "📸 Salva screenshot (PNG)",
@@ -281,7 +284,10 @@ const TRANSLATIONS = {
         "emitter-vel-hint": "Clicca uno step pieno per ciclare la velocità (· soft ● medio ◉ forte). Trascina tra gli step per dipingerne più di uno.",
         "emitter-preset-placeholder": "— Pattern preimpostato —",
         "emitter-chain-label": "Catena",
-        "emitter-swing-label": "Swing"
+        "emitter-swing-label": "Swing",
+        "btn-help": "❓ Aiuto",
+        "help-title": "❓ Aiuto e Istruzioni",
+        "btn-close-help": "✕ Chiudi"
     }
 };
 
@@ -310,6 +316,10 @@ function updateUILanguage() {
     });
     updateInstructionText();
     refreshSceneList();
+    const helpModal = document.getElementById("help-modal");
+    if (helpModal && helpModal.style.display !== "none" && typeof buildHelpHTML === "function") {
+        document.getElementById("help-content").innerHTML = buildHelpHTML();
+    }
 }
 
 function updateInstructionText() {

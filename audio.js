@@ -759,11 +759,55 @@ function addHarmonyScore(freqA, freqB, velocity) {
 
 // --- Registrazione sessione in WAV ---
 // Tap sul master bus con uno ScriptProcessor: campiona i frame senza risuonarli.
+// --- Registrazione della sessione ---
+// Percorso primario: MediaRecorder + Opus (WebM/Ogg/M4A) = file piccolo e nativo.
+// Fallback: WAV lossless via ScriptProcessorNode.
+// Nota: un ScriptProcessorNode processa SOLO se l'uscita è collegata fino al
+// destination; senza quel collegamento onaudioprocess non scatta mai e il
+// file usciva da ~1 KB.
+
+let _recording = false;
+
+// Percorso MediaRecorder (compresso)
+let _recDest = null; // MediaStreamAudioDestinationNode
+let _recDestConnected = false;
+let _mediaRecorder = null;
+let _recMimeType = "";
+let _recChunks = [];
+
+// Percorso WAV (fallback)
 let _recNode = null;
+let _recSilentGain = null;
 let _recLeft = null;
 let _recRight = null;
 let _recLength = 0;
-let _recording = false;
+
+const _recMimeCandidates = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/mp4;codecs=mp4a.40.2"];
+
+function _recExtFor(mimeType) {
+    if (!mimeType) return "webm";
+    if (mimeType.includes("ogg")) return "ogg";
+    if (mimeType.includes("mp4") || mimeType.includes("m4a")) return "m4a";
+    return "webm";
+}
+
+function _downloadBlob(blob, ext) {
+    const a = document.createElement("a");
+    const ts = new Date().toISOString().replace(/[:.]/g, "-");
+    a.href = URL.createObjectURL(blob);
+    a.download = "symphony-recording-" + ts + "." + ext;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+        URL.revokeObjectURL(a.href);
+        a.remove();
+    }, 1000);
+}
+
+function _setRecordButton(labelKey) {
+    const btn = document.getElementById("btn-record");
+    if (btn) btn.textContent = t(labelKey);
+}
 
 function _encodeWav(left, right, sampleRate) {
     const numFrames = left.length;
@@ -812,6 +856,39 @@ function toggleRecording() {
 function startRecording() {
     if (_recording) return;
     if (audioCtx.state === "suspended") audioCtx.resume();
+
+    _recording = true;
+    _setRecordButton("record-stop");
+    flashMessage(t("record-message-start"), "#ff4757");
+
+    // --- Percorso primario: MediaRecorder + Opus (file piccolo, nativo) ---
+    if (typeof MediaRecorder !== "undefined") {
+        try {
+            if (!_recDest) _recDest = audioCtx.createMediaStreamDestination();
+            _recChunks = [];
+            _recMimeType = _recMimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) || "";
+            _mediaRecorder = _recMimeType
+                ? new MediaRecorder(_recDest.stream, { mimeType: _recMimeType, audioBitsPerSecond: 128000 })
+                : new MediaRecorder(_recDest.stream, { audioBitsPerSecond: 128000 });
+            masterBus.connect(_recDest);
+            _recDestConnected = true;
+            _mediaRecorder.addEventListener("dataavailable", (e) => {
+                if (e.data && e.data.size > 0) _recChunks.push(e.data);
+            });
+            _mediaRecorder.addEventListener("stop", _finishMediaRecorder);
+            _mediaRecorder.start(250);
+            return;
+        } catch (err) {
+            console.warn("MediaRecorder non disponibile, ripiego su WAV:", err);
+            _mediaRecorder = null;
+        }
+    }
+
+    // --- Fallback: WAV lossless tramite ScriptProcessorNode ---
+    _startWaveRecorder();
+}
+
+function _startWaveRecorder() {
     _recLeft = [];
     _recRight = [];
     _recLength = 0;
@@ -824,19 +901,67 @@ function startRecording() {
         _recRight.push(new Float32Array(inR));
         _recLength += inL.length;
     };
+    // Senza una connessione fino al destination il grafo non "tira" il nodo e
+    // onaudioprocess non scatta mai: uscita su un gain muto (zero vocali).
+    _recSilentGain = audioCtx.createGain();
+    _recSilentGain.gain.value = 0;
     masterBus.connect(_recNode);
-    _recording = true;
-    const btn = document.getElementById("btn-record");
-    if (btn) btn.textContent = t("record-stop");
-    flashMessage(t("record-message-start"), "#ff4757");
+    _recNode.connect(_recSilentGain);
+    _recSilentGain.connect(audioCtx.destination);
 }
 
 function stopRecording() {
-    if (!_recording || !_recNode) return;
+    if (!_recording) return;
     _recording = false;
-    try { masterBus.disconnect(_recNode); } catch (e) {}
+    _setRecordButton("record-start");
+    flashMessage(t("record-message-stop"), "#00d2ff");
+
+    if (_mediaRecorder) {
+        if (_mediaRecorder.state !== "inactive") {
+            try {
+                _mediaRecorder.stop();
+            } catch (e) {}
+        }
+        // Il salvataggio avviene nell'handler "stop" (_finishMediaRecorder).
+        return;
+    }
+    _stopWaveRecorder();
+}
+
+function _finishMediaRecorder() {
+    if (_recDestConnected && _recDest) {
+        try {
+            masterBus.disconnect(_recDest);
+        } catch (e) {}
+        _recDestConnected = false;
+    }
+    if (_mediaRecorder) {
+        _mediaRecorder.removeEventListener("stop", _finishMediaRecorder);
+    }
+    const mime = _recMimeType || "audio/webm";
+    if (_recChunks.length > 0) {
+        _downloadBlob(new Blob(_recChunks, { type: mime }), _recExtFor(mime));
+    }
+    _recChunks = [];
+    _mediaRecorder = null;
+}
+
+function _stopWaveRecorder() {
+    if (!_recNode) return;
+    try {
+        masterBus.disconnect(_recNode);
+    } catch (e) {}
+    try {
+        _recNode.disconnect();
+    } catch (e) {}
+    if (_recSilentGain) {
+        try {
+            _recSilentGain.disconnect();
+        } catch (e) {}
+    }
     _recNode.onaudioprocess = null;
     _recNode = null;
+    _recSilentGain = null;
 
     const sampleRate = audioCtx.sampleRate;
     const left = new Float32Array(_recLength);
@@ -851,20 +976,9 @@ function stopRecording() {
     _recRight = [];
     _recLength = 0;
 
-    const blob = _encodeWav(left, right, sampleRate);
-    const a = document.createElement("a");
-    const ts = new Date().toISOString().replace(/[:.]/g, "-");
-    a.href = URL.createObjectURL(blob);
-    a.download = "symphony-recording-" + ts + ".wav";
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-        URL.revokeObjectURL(a.href);
-        a.remove();
-    }, 1000);
-    const btn = document.getElementById("btn-record");
-    if (btn) btn.textContent = t("record-start");
-    flashMessage(t("record-message-stop"), "#00d2ff");
+    if (pos > 0) {
+        _downloadBlob(_encodeWav(left, right, sampleRate), "wav");
+    }
 }
 
 // --- Visualizer: spettro di frequenza dal master bus (dopo il limitatore) ---
@@ -886,8 +1000,8 @@ function _drawVisualizer() {
         ctx2.clearRect(0, 0, w, h);
         const binCount = _vizFrequencyData.length;
         const nyquist = audioCtx.sampleRate / 2;
-        const fMin = 40;
-        const fMax = 14000; // banda musicale reale; sopra resta silenzio
+        const fMin = 45;
+        const fMax = 5200; // banda musicale reale: sopra ~5kHz la musica sintetizzata tace
         const f0 = Math.log2(fMin);
         const f1 = Math.log2(fMax);
         const barCount = Math.max(1, Math.floor(w / 3));
@@ -895,13 +1009,22 @@ function _drawVisualizer() {
         const accent = typeof getCssVar === "function" ? getCssVar("--accent", "#ff0055") : "#ff0055";
         ctx2.fillStyle = accent;
         for (let i = 0; i < barCount; i++) {
-            // Frequenza su scala logaritmica; mappa l'energia bassa su tutta la larghezza.
+            // Scala logaritmica: tutta la banda utile è distribuita sulla larghezza
+            // così anche la metà destra viene usata.
             const freq = Math.pow(2, f0 + (i / barCount) * (f1 - f0));
-            const bin = Math.min(binCount - 1, Math.max(0, Math.floor((freq / nyquist) * binCount)));
-            let v = _vizFrequencyData[bin] / 255;
-            // Compensa il rolloff naturale dei timbri sintetizzati: le ali alte
-            // vengono rialzate un po' per riempire anche la parte destra.
-            v = Math.min(1, v * 1.6 + (i / barCount) * 0.18);
+            // Media di un intorno di bin (±12% a banda): spettro continuo, niente
+            // singoli bin a palla che schizzano a fondo scala.
+            const binMid = (freq / nyquist) * binCount;
+            const halfSpread = Math.max(1, binMid * 0.12);
+            const bin0 = Math.max(0, Math.floor(binMid - halfSpread));
+            const bin1 = Math.min(binCount - 1, Math.ceil(binMid + halfSpread));
+            let acc = 0;
+            for (let b = bin0; b <= bin1; b++) acc += _vizFrequencyData[b];
+            let v = (acc / (bin1 - bin0 + 1)) / 255;
+            // Gamma < 1: rialza le code fredde (destra) senza saturare i bassi.
+            v = Math.pow(v, 0.6);
+            // Lieve rolloff-tilt verso l'alto per compensare i timbri sintetizzati.
+            v = Math.min(1, v * (1 + 0.25 * (i / barCount)));
             const bh = Math.max(1, v * h);
             ctx2.globalAlpha = 0.35 + v * 0.65;
             ctx2.fillRect(i * barW, h - bh, Math.max(1, barW - 1), bh);
