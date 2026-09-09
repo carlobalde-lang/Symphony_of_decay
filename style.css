@@ -564,6 +564,111 @@
             .emitter-panel-header:active {
                 cursor: grabbing;
             }
+            #wall-panel {
+                position: absolute;
+                top: 0;
+                left: 0;
+                background: var(--toolbox-bg);
+                border: 1px solid #a4b0be;
+                box-shadow: 0 0 25px rgba(164, 176, 190, 0.3);
+                border-radius: 12px;
+                padding: 14px;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                width: 300px;
+                max-width: calc(100vw - 40px);
+                backdrop-filter: blur(8px);
+                z-index: 30;
+                transition:
+                    left 0.12s ease-out,
+                    top 0.12s ease-out;
+            }
+            #wall-panel.dragging {
+                transition: none;
+                cursor: grabbing;
+                user-select: none;
+                opacity: 0.95;
+            }
+            .wall-panel-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                font-weight: bold;
+                color: #a4b0be;
+                font-size: 13px;
+                margin-bottom: 4px;
+                cursor: grab;
+                padding: 4px 2px;
+                -webkit-user-select: none;
+                user-select: none;
+            }
+            .wall-panel-header:active {
+                cursor: grabbing;
+            }
+            .piano-row {
+                position: relative;
+                width: 100%;
+                user-select: none;
+            }
+            .piano-white-area {
+                display: flex;
+                gap: 2px;
+            }
+            .piano-black-area {
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                pointer-events: none;
+            }
+            .piano-key {
+                font-family: inherit;
+                cursor: pointer;
+                outline: none;
+                touch-action: manipulation;
+            }
+            .piano-key:focus-visible {
+                box-shadow: 0 0 0 2px var(--accent, #2ed573);
+            }
+            .key-white {
+                flex: 1;
+                height: 40px;
+                background: linear-gradient(to bottom, #ffffff 0%, #e8e9ee 100%);
+                color: #2f3542;
+                border: 1px solid #c3c8d4;
+                border-radius: 0 0 4px 4px;
+                font-size: 10px;
+                font-weight: 600;
+                line-height: 1;
+            }
+            .key-black {
+                position: absolute;
+                top: 0;
+                height: 24px;
+                width: 10.5%;
+                background: linear-gradient(to bottom, #3a3d4a 0%, #0c0d13 100%);
+                color: #dfe4ea;
+                border: 1px solid #0c0d13;
+                border-radius: 0 0 3px 3px;
+                z-index: 2;
+                font-size: 8px;
+                font-weight: 600;
+                line-height: 1;
+                pointer-events: auto;
+            }
+            .piano-key.active {
+                background: #f1c40f !important;
+                color: #2f3542 !important;
+                border-color: #f1c40f !important;
+                box-shadow: 0 0 8px rgba(241, 196, 15, 0.8);
+            }
+            #btn-wall-sound-auto.active {
+                background: #f1c40f;
+                color: #2f3542;
+                border-color: #f1c40f;
+            }
             .pattern-steps {
                 display: flex;
                 flex-wrap: wrap;
@@ -981,6 +1086,78 @@
                 padding: 6px 10px;
                 font-style: italic;
                 opacity: 0.85;
+            }
+
+            /* --- Personalizzatore timbro: modale con slider --- */
+            #customize-content .tool-group {
+                margin-bottom: 8px;
+            }
+            #customize-content .tool-group:first-child {
+                margin-top: 12px;
+            }
+            #cust-name-input {
+                background: var(--btn-bg);
+                border: 1px solid var(--border-color);
+                color: var(--text-color);
+                padding: 8px;
+                margin: 0;
+                border-radius: 4px;
+                font-family: inherit;
+                width: 100%;
+                box-sizing: border-box;
+            }
+            #customize-content h3 {
+                margin: 14px 0 6px 0;
+                font-size: 13px;
+                font-weight: bold;
+                border-bottom: 1px solid var(--border-color);
+                padding-bottom: 4px;
+            }
+            .cust-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 8px;
+                padding: 6px 8px;
+                margin: 4px 0;
+                background: rgba(128, 128, 128, 0.1);
+                border-radius: 6px;
+            }
+            .cust-row-name {
+                font-size: 12.5px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                flex: 1;
+            }
+            .cust-row-btns {
+                display: flex;
+                gap: 6px;
+                flex-shrink: 0;
+            }
+            .cust-del {
+                opacity: 0.8;
+            }
+            .cust-del:hover {
+                opacity: 1;
+                background: rgba(255, 80, 80, 0.25);
+            }
+            .cust-message {
+                display: block;
+                font-size: 12px;
+                margin-top: 4px;
+                min-height: 16px;
+                text-align: center;
+            }
+            .cust-message.ok {
+                color: var(--accent);
+            }
+            .cust-message.warn {
+                color: #ff8080;
+            }
+            .cust-empty {
+                opacity: 0.7;
+                font-style: italic;
             }
 
             /* --- Emitter panel su mobile: pannello compatto, scrollabile e draggabile --- */

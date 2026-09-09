@@ -184,6 +184,82 @@ function setTimbreMode(mode) {
     }
 }
 
+// --- Timbri personalizzati (salvati in localStorage, integrati in SOUND_TIMBRES) ---
+const CUSTOM_TIMBRES_KEY = "symphony-custom-timbres";
+
+function clampVal(v, min, max) {
+    const n = parseFloat(v);
+    return Math.max(min, Math.min(max, isFinite(n) ? n : min));
+}
+
+function sanitizeTimbreDef(t) {
+    return {
+        key: String(t.key || ""),
+        name: String(t.name || "").slice(0, 60),
+        type1: ["sine", "triangle", "sawtooth", "square"].includes(t.type1) ? t.type1 : "sine",
+        type2: ["sine", "triangle", "sawtooth", "square"].includes(t.type2) ? t.type2 : "sine",
+        sub: !!t.sub,
+        filterType: ["lowpass", "highpass", "bandpass"].includes(t.filterType) ? t.filterType : "lowpass",
+        cutoffMult: clampVal(t.cutoffMult, 0.5, 6),
+        resonance: clampVal(t.resonance, 0, 12),
+        attack: clampVal(t.attack ?? 0.1, 0.01, 0.6),
+        decay: clampVal(t.decay ?? 2.5, 0.5, 4),
+        isCustom: true
+    };
+}
+
+function getStoredCustomTimbres() {
+    try {
+        const arr = JSON.parse(localStorage.getItem(CUSTOM_TIMBRES_KEY) || "[]");
+        return Array.isArray(arr) ? arr : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function saveStoredCustomTimbres(arr) {
+    try {
+        localStorage.setItem(CUSTOM_TIMBRES_KEY, JSON.stringify(arr));
+    } catch (e) {}
+}
+
+function isCustomTimbreKey(key) {
+    return /^custom_/.test(key || "");
+}
+
+function loadCustomTimbres() {
+    getStoredCustomTimbres().forEach((t) => {
+        if (t && t.key && t.name && SOUND_TIMBRES[t.key] === undefined) {
+            SOUND_TIMBRES[t.key] = sanitizeTimbreDef(t);
+        }
+    });
+}
+
+function saveCustomTimbre(name, def) {
+    const trimmed = String(name || "").trim().slice(0, 60);
+    if (!trimmed) return null;
+    const key = "custom_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 6);
+    const stored = sanitizeTimbreDef({ ...def, key, name: trimmed });
+    SOUND_TIMBRES[key] = stored;
+    const arr = getStoredCustomTimbres();
+    arr.push(stored);
+    saveStoredCustomTimbres(arr);
+    return key;
+}
+
+function deleteCustomTimbre(key) {
+    if (!isCustomTimbreKey(key)) return;
+    if (SOUND_TIMBRES[key]) delete SOUND_TIMBRES[key];
+    const arr = getStoredCustomTimbres().filter((t) => t.key !== key);
+    saveStoredCustomTimbres(arr);
+    if (currentTimbreMode === key) {
+        currentTimbreMode = "sine";
+        const sel = document.getElementById("timbre-select");
+        if (sel) sel.value = "sine";
+    }
+    if (typeof populateTimbreSelect === "function") populateTimbreSelect();
+}
+
 function populateTimbreSelect() {
     const sel = document.getElementById("timbre-select");
     if (!sel) return;
@@ -191,10 +267,30 @@ function populateTimbreSelect() {
     for (const [key, timbre] of Object.entries(SOUND_TIMBRES)) {
         const opt = document.createElement("option");
         opt.value = key;
-        opt.textContent = timbre.name;
+        opt.textContent = isCustomTimbreKey(key) ? "⭐ " + timbre.name : timbre.name;
         if (key === currentTimbreMode) opt.selected = true;
         sel.appendChild(opt);
     }
+}
+
+// Timbre corrente con fallback: ogni suono (melodico, note, strumenti, sequencer)
+// passa da qui così cambiare il Timbre / Sound Type cambia davvero tutto.
+function getCurrentTimbre() {
+    return SOUND_TIMBRES[currentTimbreMode] || SOUND_TIMBRES.sine;
+}
+
+// Durata di coda coerente col timbro scelto (pad/bell sostengono più a lungo;
+// i timbri personalizzati hanno il proprio parametro "decay").
+function getTimbreDuration() {
+    const tb = getCurrentTimbre();
+    if (typeof tb.decay === "number") return tb.decay;
+    return currentTimbreMode === "pad" ? 3.5 : currentTimbreMode === "bell" ? 3.0 : 2.5;
+}
+
+function getTimbreAttack() {
+    const tb = getCurrentTimbre();
+    if (typeof tb.attack === "number") return tb.attack;
+    return currentTimbreMode === "pad" ? 0.4 : 0.1;
 }
 
 const SCALE_PATTERNS = {
@@ -252,11 +348,16 @@ function degreeToFrequency(degreeIndex) {
 // da scala musicale corrente e dal "drift" melodico usato per gli altri oggetti.
 const NOTE_FREQUENCIES = {
     note_do: 261.626, // C4
+    note_dod: 277.183, // C#4
     note_re: 293.665, // D4
+    note_reb: 311.127, // D#4
     note_mi: 329.628, // E4
     note_fa: 349.228, // F4
+    note_fad: 369.994, // F#4
     note_sol: 391.995, // G4
+    note_sold: 415.305, // G#4
     note_la: 440.0, // A4
+    note_lad: 466.164, // A#4
     note_si: 493.883 // B4
 };
 
@@ -387,7 +488,7 @@ function playMixedSound(typeA, typeB, velocity) {
     const now = getScheduledTime(audioCtx.currentTime);
     const primaryType = typeA;
     const secondaryType = typeB && typeB !== typeA ? typeB : null;
-    const timbre = SOUND_TIMBRES[currentTimbreMode] || SOUND_TIMBRES.sine;
+    const timbre = getCurrentTimbre();
 
     const freq1 = nextNoteFrequency(primaryType);
 
@@ -419,10 +520,10 @@ function playMixedSound(typeA, typeB, velocity) {
     const curvedImpact = Math.pow(normalizedImpact, 0.6);
     const vol1 = (IMPACT_MIN_VOL + (IMPACT_MAX_VOL - IMPACT_MIN_VOL) * curvedImpact) * baseVol1 * masterVolume;
 
-    const duration = currentTimbreMode === "pad" ? 3.5 : currentTimbreMode === "bell" ? 3.0 : 2.5;
+    const duration = getTimbreDuration();
 
     gain1.gain.setValueAtTime(0, now);
-    gain1.gain.linearRampToValueAtTime(vol1, now + (currentTimbreMode === "pad" ? 0.4 : 0.1));
+    gain1.gain.linearRampToValueAtTime(vol1, now + getTimbreAttack());
     gain1.gain.exponentialRampToValueAtTime(0.0001, now + duration);
 
     osc1.connect(filter1);
@@ -521,10 +622,11 @@ function beginVoice() {
 
 function playKick(v) {
     const now = getScheduledTime(audioCtx.currentTime);
+    const tb = getCurrentTimbre();
     beginVoice();
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
-    osc.type = "sine";
+    osc.type = tb.type1;
     osc.frequency.setValueAtTime(170, now);
     osc.frequency.exponentialRampToValueAtTime(48, now + 0.12);
     gain.gain.setValueAtTime(0.9 * v * masterVolume, now);
@@ -539,10 +641,11 @@ function playKick(v) {
 
 function playSnare(v) {
     const now = getScheduledTime(audioCtx.currentTime);
+    const tb = getCurrentTimbre();
     beginVoice();
     const body = audioCtx.createOscillator();
     const bg = audioCtx.createGain();
-    body.type = "triangle";
+    body.type = tb.type1;
     body.frequency.setValueAtTime(190, now);
     body.frequency.exponentialRampToValueAtTime(120, now + 0.12);
     bg.gain.setValueAtTime(0.55 * v * masterVolume, now);
@@ -572,6 +675,7 @@ function playSnare(v) {
 
 function playHiHat(open, v) {
     const now = getScheduledTime(audioCtx.currentTime);
+    const tb = getCurrentTimbre();
     beginVoice();
     const src = audioCtx.createBufferSource();
     src.buffer = getNoiseBuffer(open ? 0.5 : 0.1);
@@ -583,15 +687,27 @@ function playHiHat(open, v) {
     gain.gain.exponentialRampToValueAtTime(0.0001, now + (open ? 0.4 : 0.07));
     src.connect(hp);
     hp.connect(gain);
+    // Ping timbrico: rende udibile il cambio di sound type anche sullo hi-hat a rumore
+    const ping = audioCtx.createOscillator();
+    const pg = audioCtx.createGain();
+    ping.type = tb.type2;
+    ping.frequency.setValueAtTime(open ? 5200 : 6800, now);
+    pg.gain.setValueAtTime(0.1 * v * masterVolume, now);
+    pg.gain.exponentialRampToValueAtTime(0.0001, now + (open ? 0.18 : 0.05));
+    ping.connect(pg);
     connectToEffectsBus(gain);
+    connectToEffectsBus(pg);
     src.start(now);
     src.stop(now + (open ? 0.45 : 0.1));
-    const entry = registerVoice([src], [gain]);
+    ping.start(now);
+    ping.stop(now + (open ? 0.2 : 0.07));
+    const entry = registerVoice([src, ping], [gain, pg]);
     src.onended = () => forgetVoice(entry);
 }
 
 function playClap(v) {
     const now = getScheduledTime(audioCtx.currentTime);
+    const tb = getCurrentTimbre();
     beginVoice();
     const src = audioCtx.createBufferSource();
     src.buffer = getNoiseBuffer(0.3);
@@ -612,19 +728,31 @@ function playClap(v) {
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
     src.connect(bp);
     bp.connect(gain);
+    // Ping timbrico: il clap resta a rumore ma colora il timbro scelto
+    const ping = audioCtx.createOscillator();
+    const pg = audioCtx.createGain();
+    ping.type = tb.type2;
+    ping.frequency.setValueAtTime(2400, now);
+    pg.gain.setValueAtTime(0.08 * v * masterVolume, now);
+    pg.gain.exponentialRampToValueAtTime(0.0001, now + 0.06);
+    ping.connect(pg);
     connectToEffectsBus(gain);
+    connectToEffectsBus(pg);
     src.start(now);
     src.stop(now + 0.32);
-    const entry = registerVoice([src], [gain]);
+    ping.start(now);
+    ping.stop(now + 0.08);
+    const entry = registerVoice([src, ping], [gain, pg]);
     src.onended = () => forgetVoice(entry);
 }
 
 function playConga(v, high) {
     const now = getScheduledTime(audioCtx.currentTime);
+    const tb = getCurrentTimbre();
     beginVoice();
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
-    osc.type = "sine";
+    osc.type = tb.type1;
     const f0 = high ? 380 : 240;
     const f1 = high ? 180 : 105;
     const dur = high ? 0.15 : 0.3;
@@ -642,10 +770,11 @@ function playConga(v, high) {
 
 function playClave(v) {
     const now = getScheduledTime(audioCtx.currentTime);
+    const tb = getCurrentTimbre();
     beginVoice();
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
-    osc.type = "triangle";
+    osc.type = tb.type2;
     osc.frequency.setValueAtTime(2100, now);
     gain.gain.setValueAtTime(0.4 * v * masterVolume, now);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
@@ -659,18 +788,20 @@ function playClave(v) {
 
 function playHarpsichordNote(freq, v) {
     const now = getScheduledTime(audioCtx.currentTime);
+    const tb = getCurrentTimbre();
     beginVoice();
     const gain = audioCtx.createGain();
     const harmonics = [1, 2, 3, 4, 5, 6, 8];
     const amps = [1, 0.55, 0.42, 0.3, 0.2, 0.13, 0.07];
+    const dur = currentTimbreMode === "pad" ? 1.8 : currentTimbreMode === "bell" ? 1.3 : 0.85;
     const vol = 0.3 * v * masterVolume;
     gain.gain.setValueAtTime(0, now);
     gain.gain.linearRampToValueAtTime(vol, now + 0.003);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.85);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
     const oscs = [];
     harmonics.forEach((h, i) => {
         const o = audioCtx.createOscillator();
-        o.type = i === 0 ? "sine" : "triangle";
+        o.type = i === 0 ? tb.type1 : tb.type2;
         o.frequency.setValueAtTime(freq * h, now);
         oscs.push(o);
         o.connect(gain);
@@ -688,7 +819,7 @@ function playHarpsichordNote(freq, v) {
     cg.connect(gain);
     connectToEffectsBus(gain);
     oscs.forEach((o) => o.start(now));
-    oscs.forEach((o) => o.stop(now + 0.9));
+    oscs.forEach((o) => o.stop(now + dur + 0.1));
     click.start(now);
     click.stop(now + 0.03);
     const entry = registerVoice(oscs.concat(click), [gain]);
@@ -882,18 +1013,88 @@ function startRecording() {
             console.warn("MediaRecorder non disponibile, ripiego su WAV:", err);
             _mediaRecorder = null;
         }
+    } else {
+        console.warn("MediaRecorder non supportato, registrazione in WAV");
     }
 
-    // --- Fallback: WAV lossless tramite ScriptProcessorNode ---
+    // --- Fallback: WAV lossless tramite AudioWorklet (ScriptProcessor solo se arcaici) ---
     _startWaveRecorder();
 }
 
-function _startWaveRecorder() {
+async function _startWaveRecorder() {
     _recLeft = [];
     _recRight = [];
     _recLength = 0;
-    _recNode = audioCtx.createScriptProcessor(4096, 2, 2);
-    _recNode.onaudioprocess = (e) => {
+    try {
+        _recNode = await _ensureRecorderWorklet();
+    } catch (err) {
+        console.warn("AudioWorklet non disponibile, ripiego su ScriptProcessor:", err);
+        _recNode = _createLegacyScriptProcessor();
+    }
+    if (!_recNode) return;
+    // Se nel frattempo la registrazione è già stata fermata, non collegare nulla.
+    if (!_recording) {
+        try {
+            _recNode.disconnect();
+        } catch (e) {}
+        _recNode = null;
+        return;
+    }
+    // Anche un AudioWorkletNode processa solo se l'uscita è collegata fino al
+    // destination: gain muto, come in passato con il ScriptProcessorNode.
+    _recSilentGain = audioCtx.createGain();
+    _recSilentGain.gain.value = 0;
+    masterBus.connect(_recNode);
+    _recNode.connect(_recSilentGain);
+    _recSilentGain.connect(audioCtx.destination);
+}
+
+let _workletModuleUrl = null;
+let _workletLoaded = false;
+
+async function _ensureRecorderWorklet() {
+    if (!(audioCtx.audioWorklet && typeof AudioWorkletNode !== "undefined")) {
+        throw new Error("AudioWorklet not supported");
+    }
+    if (!_workletLoaded) {
+        if (_workletModuleUrl === null) {
+            const code =
+                "class SessionRecorderProcessor extends AudioWorkletProcessor { " +
+                "process(inputs) { " +
+                "const input = inputs[0]; " +
+                "if (input && input[0]) { " +
+                "const ch0 = input[0]; " +
+                "const ch1 = input[1] || ch0; " +
+                "this.port.postMessage({ ch0: ch0.slice(0), ch1: ch1.slice(0) }); " +
+                "} " +
+                "return true; " +
+                "} " +
+                "} " +
+                "registerProcessor('session-recorder', SessionRecorderProcessor);";
+            _workletModuleUrl = URL.createObjectURL(new Blob([code], { type: "application/javascript" }));
+        }
+        await audioCtx.audioWorklet.addModule(_workletModuleUrl);
+        _workletLoaded = true;
+    }
+    const node = new AudioWorkletNode(audioCtx, "session-recorder", {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        outputChannelCount: [2]
+    });
+    node.port.onmessage = (e) => {
+        if (!_recording) return;
+        const ch0 = e.data.ch0;
+        const ch1 = e.data.ch1;
+        _recLeft.push(ch0);
+        _recRight.push(ch1);
+        _recLength += ch0.length;
+    };
+    return node;
+}
+
+function _createLegacyScriptProcessor() {
+    const node = audioCtx.createScriptProcessor(4096, 2, 2);
+    node.onaudioprocess = (e) => {
         if (!_recording) return;
         const inL = e.inputBuffer.getChannelData(0);
         const inR = e.inputBuffer.getChannelData(1);
@@ -901,13 +1102,7 @@ function _startWaveRecorder() {
         _recRight.push(new Float32Array(inR));
         _recLength += inL.length;
     };
-    // Senza una connessione fino al destination il grafo non "tira" il nodo e
-    // onaudioprocess non scatta mai: uscita su un gain muto (zero vocali).
-    _recSilentGain = audioCtx.createGain();
-    _recSilentGain.gain.value = 0;
-    masterBus.connect(_recNode);
-    _recNode.connect(_recSilentGain);
-    _recSilentGain.connect(audioCtx.destination);
+    return node;
 }
 
 function stopRecording() {
@@ -1034,4 +1229,5 @@ function _drawVisualizer() {
     requestAnimationFrame(_drawVisualizer);
 }
 _drawVisualizer();
+loadCustomTimbres();
 

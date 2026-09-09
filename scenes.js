@@ -153,7 +153,13 @@ function createBodyFromSerialized(bd) {
         body.emitterObjectType = bd.emitterObjectType || "bass";
         body.emitterPower = bd.emitterPower || 12;
         body.emitterBPM = bd.emitterBPM || 90;
-        body.emitterLifetime = bd.emitterLifetime !== null && bd.emitterLifetime !== undefined ? bd.emitterLifetime : 8;
+        let lifetimeVal = bd.emitterLifetime;
+        if (lifetimeVal === null || lifetimeVal === undefined) lifetimeVal = 8;
+        else {
+            const n = typeof lifetimeVal === "number" ? lifetimeVal : parseFloat(lifetimeVal);
+            lifetimeVal = isNaN(n) ? 0 : n;
+        }
+        body.emitterLifetime = lifetimeVal;
         body.emitterPaused = bd.emitterPaused || false;
         body.emitterSyncEnabled = bd.emitterSyncEnabled || false;
         body.emitterSyncDivision = bd.emitterSyncDivision || 1;
@@ -189,8 +195,16 @@ function createBodyFromSerialized(bd) {
         if (body.emitterSyncEnabled) alignEmitterToGrid(body);
     }
     if (bd.remainingLifespanMs !== null && bd.remainingLifespanMs !== undefined) {
-        body.lifespanMs = bd.remainingLifespanMs;
-        body.spawnedAtMs = Date.now();
+        if (bd.remainingLifespanMs > 0) {
+            body.lifespanMs = bd.remainingLifespanMs;
+            body.spawnedAtMs = Date.now();
+        } else {
+            // L'oggetto era già scaduto quando la scena è stata salvata: ricrearlo con
+            // lifespanMs = 0 lo renderebbe immortale (0 significa "senza scadenza").
+            // Meglio distruggerlo subito, come sarebbe successo in gioco.
+            world.destroyBody(body);
+            return null;
+        }
     }
     return body;
 }

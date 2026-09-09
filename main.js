@@ -27,6 +27,7 @@ function setSnapGridEnabled(enabled) {
     snapGridEnabled = enabled;
     const btn = document.getElementById("btn-snap-grid");
     if (btn) btn.classList.toggle("active", enabled);
+    if (!enabled) _gridCacheKey = null;
 }
 
 function toggleSnapGrid() {
@@ -41,26 +42,64 @@ function applySnapToGrid(x, y) {
     };
 }
 
+// La griglia viene rasterizzata in un canvas offscreen una sola volta (il costo
+// si paga solo quando zoom/pan/risoluzione/tema cambiano di almeno un pixel):
+// ad ogni frame resta solo una drawImage, così gli FPS non calano con la griglia attiva.
+let _gridCache = null;
+let _gridCacheKey = null;
+
+function _rebuildGridCache(cellCss, phaseCssX, phaseCssY, accent) {
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.max(1, Math.round(logicalWidth * dpr));
+    const h = Math.max(1, Math.round(logicalHeight * dpr));
+    if (!_gridCache) _gridCache = document.createElement("canvas");
+    if (_gridCache.width !== w) _gridCache.width = w;
+    if (_gridCache.height !== h) _gridCache.height = h;
+    const g = _gridCache.getContext("2d");
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, w, h);
+
+    const cell = cellCss * dpr;
+    const px = Math.round(phaseCssX * dpr);
+    const py = Math.round(phaseCssY * dpr);
+    g.strokeStyle = accent + "22";
+    g.lineWidth = dpr;
+    g.beginPath();
+    for (let sx = px; sx <= w; sx += cell) {
+        const x = Math.round(sx) + 0.5;
+        g.moveTo(x, 0);
+        g.lineTo(x, h);
+    }
+    for (let sy = py; sy <= h; sy += cell) {
+        const y = Math.round(sy) + 0.5;
+        g.moveTo(0, y);
+        g.lineTo(w, y);
+    }
+    g.stroke();
+}
+
 function drawGrid() {
     if (!snapGridEnabled) return;
-    const leftWorld = screenToWorldX(0);
-    const topWorld = screenToWorldY(0);
-    const rightWorld = screenToWorldX(logicalWidth);
-    const bottomWorld = screenToWorldY(logicalHeight);
+    const dpr = window.devicePixelRatio || 1;
+    const cellPx = GRID_CELL * SCALE * camZoom; // px (CSS) tra due righe
+    if (cellPx < 2) return;
+    const cellR = Math.round(cellPx * 100) / 100;
+    const phaseX = ((camOffsetX % cellR) + cellR) % cellR;
+    const phaseY = ((camOffsetY % cellR) + cellR) % cellR;
+    const phaseXi = Math.round(phaseX);
+    const phaseYi = Math.round(phaseY);
+    const accent = getCssVar("--accent", "#ff0055");
+
+    const key = cellR.toFixed(2) + "|" + phaseXi + "|" + phaseYi + "|" + logicalWidth + "|" + logicalHeight + "|" + accent;
+    if (key !== _gridCacheKey) {
+        _gridCacheKey = key;
+        _rebuildGridCache(cellR, phaseXi, phaseYi, accent);
+    }
 
     ctx.save();
-    ctx.strokeStyle = getCssVar("--accent", "#ff0055") + "22";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let x = Math.floor(leftWorld / GRID_CELL) * GRID_CELL; x <= rightWorld; x += GRID_CELL) {
-        ctx.moveTo(x * SCALE, topWorld * SCALE);
-        ctx.lineTo(x * SCALE, bottomWorld * SCALE);
-    }
-    for (let y = Math.floor(topWorld / GRID_CELL) * GRID_CELL; y <= bottomWorld; y += GRID_CELL) {
-        ctx.moveTo(leftWorld * SCALE, y * SCALE);
-        ctx.lineTo(rightWorld * SCALE, y * SCALE);
-    }
-    ctx.stroke();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(_gridCache, 0, 0, logicalWidth, logicalHeight);
     ctx.restore();
 }
 
@@ -181,7 +220,7 @@ function gameLoop() {
 
         for (let f = b.getFixtureList(); f; f = f.getNext()) {
             const shape = f.getType();
-            const bodyColor = b.isWall ? wallColor : b.renderColor || "#fff";
+            const bodyColor = isWallBody(b) ? wallNoteColor(b.soundType) || wallColor : b.renderColor || "#fff";
             ctx.fillStyle = bodyColor;
             ctx.strokeStyle = "#000";
             ctx.lineWidth = 1.5;
@@ -386,10 +425,19 @@ updateUILanguage();
 autosaveStartInterval();
 restoreLastSessionIfAny();
 
+buildWallPiano();
+initWallPanelDrag();
+
 const timbreSelectEl = document.getElementById("timbre-select");
 if (timbreSelectEl) {
     timbreSelectEl.addEventListener("change", (e) => {
         setTimbreMode(e.target.value);
+        // Se il personalizzatore è aperto, seguilo sul timbro appena scelto.
+        const custModal = document.getElementById("customize-modal");
+        if (custModal && custModal.style.display !== "none") {
+            _customizerDef = _timbreDefFromMode();
+            buildCustomizerContent();
+        }
     });
 }
 
@@ -536,9 +584,226 @@ function closeHelp() {
     if (modal) modal.style.display = "none";
 }
 
+// --- Personalizzatore timbro: slider + salvataggio/eliminazione dei timbri custom ---
+let _customizerDef = null;
+let _customizerName = "";
+let _customizerSnapshots = {}; // key -> snapshot dei timbri mutati live (ripristino alla chiusura)
+
+const _WAVES = ["sine", "triangle", "sawtooth", "square"];
+const _FILTERS = ["lowpass", "highpass", "bandpass"];
+
+function _timbreDefFromMode() {
+    const tb = getCurrentTimbre();
+    return sanitizeTimbreDef({
+        type1: tb.type1,
+        type2: tb.type2,
+        sub: tb.sub,
+        filterType: tb.filterType,
+        cutoffMult: tb.cutoffMult,
+        resonance: tb.resonance,
+        attack: tb.attack,
+        decay: tb.decay
+    });
+}
+
+function _waveOptions(selected) {
+    return _WAVES.map((w) => `<option value="${w}" ${w === selected ? "selected" : ""}>${w}</option>`).join("");
+}
+
+function _filterOptions(selected) {
+    return _FILTERS.map((f) => `<option value="${f}" ${f === selected ? "selected" : ""}>${f}</option>`).join("");
+}
+
+function _customListHTML() {
+    const items = getStoredCustomTimbres();
+    if (!items.length) return `<p class="cust-empty" data-i18n="cust-empty">${t("cust-empty")}</p>`;
+    return items
+        .map(
+            (item) => `
+            <div class="cust-row">
+                <span class="cust-row-name" title="${item.key}">${item.name}</span>
+                <span class="cust-row-btns">
+                    <button class="sub-btn" onclick="selectCustomTimbre('${item.key}')" data-i18n="cust-use">✔ Use</button>
+                    <button class="sub-btn cust-del" onclick="deleteCustomTimbreFromList('${item.key}')" data-i18n="cust-delete" title="${t("cust-delete")}">🗑️</button>
+                </span>
+            </div>`
+        )
+        .join("");
+}
+
+function buildCustomizerContent() {
+    const host = document.getElementById("customize-content");
+    if (!host) return;
+    if (!_customizerDef) _customizerDef = _timbreDefFromMode();
+    const d = _customizerDef;
+    const nameEl = document.getElementById("cust-name-input");
+    const nameValue = nameEl ? nameEl.value : _customizerName;
+
+    host.innerHTML = `
+        <p class="help-tip" data-i18n="cust-hint">${t("cust-hint")}</p>
+
+        <div class="tool-group">
+            <label>${t("cust-wave1")}</label>
+            <select id="cust-wave1" class="scene-select" onchange="updateCustomizerDef()">${_waveOptions(d.type1)}</select>
+        </div>
+        <div class="tool-group">
+            <label>${t("cust-wave2")}</label>
+            <select id="cust-wave2" class="scene-select" onchange="updateCustomizerDef()">${_waveOptions(d.type2)}</select>
+        </div>
+        <div class="tool-group">
+            <label style="flex-direction: row; justify-content: flex-start; gap: 6px">
+                <input type="checkbox" id="cust-sub" ${d.sub ? "checked" : ""} onchange="updateCustomizerDef()" />
+                <span>${t("cust-sub")}</span>
+            </label>
+            <label style="flex-direction: row; justify-content: flex-start; gap: 6px">
+                <select id="cust-filter" class="scene-select" style="margin: 0" onchange="updateCustomizerDef()">${_filterOptions(d.filterType)}</select>
+                <span style="opacity: 0.7; white-space: nowrap">${t("cust-filter")}</span>
+            </label>
+        </div>
+        <div class="tool-group">
+            <label>${t("cust-cutoff")}: <span id="val-cutoff" class="slider-val">${d.cutoffMult.toFixed(2)}</span></label>
+            <input type="range" id="cust-cutoff" min="0.5" max="6" step="0.05" value="${d.cutoffMult}" oninput="updateCustomizerDef()" />
+        </div>
+        <div class="tool-group">
+            <label>${t("cust-resonance")}: <span id="val-resonance" class="slider-val">${d.resonance.toFixed(1)}</span></label>
+            <input type="range" id="cust-resonance" min="0" max="12" step="0.1" value="${d.resonance}" oninput="updateCustomizerDef()" />
+        </div>
+        <div class="tool-group">
+            <label>${t("cust-attack")}: <span id="val-attack" class="slider-val">${d.attack.toFixed(2)}</span></label>
+            <input type="range" id="cust-attack" min="0.01" max="0.6" step="0.01" value="${d.attack}" oninput="updateCustomizerDef()" />
+        </div>
+        <div class="tool-group">
+            <label>${t("cust-decay")}: <span id="val-decay" class="slider-val">${d.decay.toFixed(2)}</span></label>
+            <input type="range" id="cust-decay" min="0.5" max="4" step="0.05" value="${d.decay}" oninput="updateCustomizerDef()" />
+        </div>
+
+        <div class="tool-group" style="margin-top: 8px">
+            <input type="text" id="cust-name-input" class="scene-select" style="margin: 0" placeholder="${t("cust-name-placeholder")}" value="${nameValue.replace(/"/g, "&quot;")}" oninput="_customizerName = this.value" maxlength="60" />
+            <button class="action-btn" style="padding: 8px" onclick="saveCustomTimbreFromPanel()" data-i18n="cust-save">💾 Save Timbre</button>
+            <span id="cust-message" class="cust-message"></span>
+        </div>
+
+        <h3>${t("cust-your")}</h3>
+        <div id="cust-list">${_customListHTML()}</div>
+    `;
+    _customizerName = nameValue;
+}
+
+function updateCustomizerDef() {
+    if (!_customizerDef) return;
+    const g = (id) => document.getElementById(id);
+    const values = {
+        type1: g("cust-wave1").value,
+        type2: g("cust-wave2").value,
+        sub: g("cust-sub").checked,
+        filterType: g("cust-filter").value,
+        cutoffMult: parseFloat(g("cust-cutoff").value),
+        resonance: parseFloat(g("cust-resonance").value),
+        attack: parseFloat(g("cust-attack").value),
+        decay: parseFloat(g("cust-decay").value)
+    };
+    Object.assign(_customizerDef, values);
+    // Applicazione live: muta il timbro attivo così tutti i suoni seguono subito
+    // gli slider. Lo snapshot serve per ripristinarlo alla chiusura se non salvi.
+    const live = SOUND_TIMBRES[currentTimbreMode];
+    if (live) {
+        if (!(currentTimbreMode in _customizerSnapshots)) {
+            _customizerSnapshots[currentTimbreMode] = { ...live };
+        }
+        Object.assign(live, values);
+    }
+    const val = (id, v) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = v;
+    };
+    val("val-cutoff", values.cutoffMult.toFixed(2));
+    val("val-resonance", values.resonance.toFixed(1));
+    val("val-attack", values.attack.toFixed(2));
+    val("val-decay", values.decay.toFixed(2));
+}
+
+function _restoreCustomizerSnapshots() {
+    for (const key of Object.keys(_customizerSnapshots)) {
+        const live = SOUND_TIMBRES[key];
+        if (!live) continue;
+        const snap = _customizerSnapshots[key];
+        for (const k of Object.keys(snap)) live[k] = snap[k];
+        for (const k of Object.keys(live)) {
+            if (!(k in snap)) delete live[k];
+        }
+    }
+    _customizerSnapshots = {};
+}
+
+function openTimbreCustomizer() {
+    _customizerSnapshots = {};
+    _customizerDef = _timbreDefFromMode();
+    _customizerName = "";
+    buildCustomizerContent();
+    const modal = document.getElementById("customize-modal");
+    if (modal) modal.style.display = "flex";
+}
+
+function closeTimbreCustomizer() {
+    _restoreCustomizerSnapshots();
+    const modal = document.getElementById("customize-modal");
+    if (modal) modal.style.display = "none";
+}
+
+function saveCustomTimbreFromPanel() {
+    updateCustomizerDef();
+    const nameEl = document.getElementById("cust-name-input");
+    const name = nameEl ? nameEl.value.trim() : "";
+    const msg = document.getElementById("cust-message");
+    if (!name) {
+        if (msg) {
+            msg.textContent = t("cust-warn-name");
+            msg.className = "cust-message warn";
+        }
+        if (nameEl) nameEl.focus();
+        return;
+    }
+    const key = saveCustomTimbre(name, _customizerDef);
+    if (!key) return;
+    // Il salvataggio "impegna" le modifiche: i timbri di partenza tornano originali
+    // (il custom appena creato conserva già i valori modulati).
+    _restoreCustomizerSnapshots();
+    populateTimbreSelect();
+    currentTimbreMode = key;
+    const sel = document.getElementById("timbre-select");
+    if (sel) sel.value = key;
+    _customizerDef = _timbreDefFromMode();
+    _customizerName = "";
+    buildCustomizerContent();
+    const savedMsg = document.getElementById("cust-message");
+    if (savedMsg) {
+        savedMsg.textContent = t("cust-saved");
+        savedMsg.className = "cust-message ok";
+    }
+}
+
+function selectCustomTimbre(key) {
+    if (!SOUND_TIMBRES[key]) return;
+    currentTimbreMode = key;
+    const sel = document.getElementById("timbre-select");
+    if (sel) sel.value = key;
+    _customizerDef = _timbreDefFromMode();
+    buildCustomizerContent();
+}
+
+function deleteCustomTimbreFromList(key) {
+    deleteCustomTimbre(key);
+    buildCustomizerContent();
+}
+
 // Scorciatoie da tastiera
 window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
+        const custModal = document.getElementById("customize-modal");
+        if (custModal && custModal.style.display !== "none") {
+            custModal.style.display = "none";
+            return;
+        }
         const helpModal = document.getElementById("help-modal");
         if (helpModal && helpModal.style.display !== "none") {
             helpModal.style.display = "none";

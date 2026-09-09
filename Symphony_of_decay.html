@@ -130,6 +130,9 @@
                                 <button class="block-btn" id="btn-emitter" onclick="selectBlock('emitter')" data-i18n="block-emitter">
                                     🎯 Emitter
                                 </button>
+                                <button class="block-btn" id="btn-echo" onclick="selectBlock('echo')" data-i18n="block-echo">
+                                    Echo
+                                </button>
                             </div>
                         </div>
                     </details>
@@ -229,7 +232,10 @@
 
                     <div class="tool-group">
                         <label data-i18n="timbre-label">Timbre / Sound Type:</label>
-                        <select id="timbre-select" class="scene-select" onchange="setTimbreMode(this.value)"></select>
+                        <div style="display: flex; gap: 6px; align-items: center">
+                            <select id="timbre-select" class="scene-select" style="flex: 1; margin: 0" onchange="setTimbreMode(this.value)"></select>
+                            <button class="sub-btn" id="btn-customize-timbre" onclick="openTimbreCustomizer()" data-i18n="btn-customize-timbre" style="white-space: nowrap">✨ Customize</button>
+                        </div>
                     </div>
 
                     <div class="tool-group">
@@ -743,6 +749,31 @@
                     step="1"
                     value="8"
                     oninput="setEmitterLifetime(this.value)" />
+            </div>
+        </div>
+
+        <div id="wall-panel" style="display: none">
+            <div class="wall-panel-header">
+                <span data-i18n="wall-panel-title">🧱 Wall Sound</span>
+                <button class="sub-btn" onclick="closeWallPanel()" data-i18n="wall-panel-close">✕ Close</button>
+            </div>
+            <p class="help-tip" data-i18n="wall-panel-hint" style="font-size: 11px; margin: 0 0 4px 0">
+                Choose the note this wall plays when touched. Tap a key to hear it.
+                The wall takes the note's color: warm for low notes, cold for high ones. Gray = no own sound.
+            </p>
+            <div id="wall-piano" class="piano-row"></div>
+            <button class="sub-btn" id="btn-wall-sound-auto" onclick="setWallSound('')" data-i18n="wall-sound-auto">
+                🎼 Auto
+            </button>
+        </div>
+
+        <div id="customize-modal" class="modal-overlay" style="display: none" onclick="if (event.target === this) closeTimbreCustomizer()">
+            <div class="modal-box">
+                <div class="modal-header">
+                    <span class="modal-title" data-i18n="cust-title">✨ Customize Sound</span>
+                    <button class="sub-btn" onclick="closeTimbreCustomizer()" data-i18n="btn-close-help">✕ Close</button>
+                </div>
+                <div class="modal-scroll" id="customize-content"></div>
             </div>
         </div>
 

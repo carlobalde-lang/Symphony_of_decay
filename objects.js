@@ -235,6 +235,10 @@ const blockConfigs = {
     inst_conga: { name: "inst_conga", isCircle: true, radius: 24, color: "#b5533d", density: 0.65, restitution: 0.25 },
     inst_bongo: { name: "inst_bongo", isCircle: true, radius: 22, color: "#d97b54", density: 0.6, restitution: 0.3 },
     inst_clave: { name: "inst_clave", isCircle: true, radius: 17, color: "#57606f", density: 0.9, restitution: 0.45 },
+    // Sfera "eco" (grigia): nessun suono proprio, ripete quello di ciò che tocca
+    // (se tocca un muro senza nota assegnata resta muta, come il muro). Vedi il
+    // gestore begin-contact per la risoluzione del suono.
+    echo: { name: "echo", isCircle: true, radius: 22, color: "#9aa0a9", density: 0.2, restitution: 0.5 },
     wall: {
         name: "wall",
         isRect: true,
@@ -818,11 +822,27 @@ world.on("begin-contact", (contact) => {
         const velB = bodyB.getLinearVelocity();
         const relativeVel = Math.hypot(velA.x - velB.x, velA.y - velB.y);
         if (relativeVel > 0.35) {
-            // Il muro non ha un suono proprio: prende in prestito il timbro dell'oggetto che lo colpisce.
             let soundA = bodyA.soundType;
             let soundB = bodyB.soundType;
+
+            // Sfera grigia "eco": non ha un suono proprio, ripete quello dell'altro corpo.
+            // Due sfere eco insieme non producono nulla.
+            const isEcho = () => soundA === "echo" || soundB === "echo";
+            if (isEcho()) {
+                if (soundA === "echo" && soundB === "echo") return;
+                if (soundA === "echo") soundA = soundB;
+                if (soundB === "echo") soundB = soundA;
+            }
+
+            // Il muro senza nota assegnata non ha un suono proprio: prende in prestito
+            // quello dell'oggetto che lo colpisce. Con una nota assegnata (vedi pannello
+            // del muro) resta il suo suono.
             if (soundA === "wall" && soundB !== "wall") soundA = soundB;
             if (soundB === "wall" && soundA !== "wall") soundB = soundA;
+
+            // Dopo le sostituzioni non deve rimanere un lato "virtuale" (echo su muro
+            // muto, muro su muro, ecc.): senza un suono reale non si suona nulla.
+            if (soundA === "wall" || soundB === "wall" || soundA === "echo" || soundB === "echo") return;
 
             // Intensità dell'impatto: combina velocità relativa e massa effettiva della coppia,
             // così un urto pesante e lento suona comunque più "forte" di uno leggero e veloce.
@@ -836,10 +856,14 @@ world.on("begin-contact", (contact) => {
             playMixedSound(soundA, soundB, impactIntensity);
             const posA = bodyA.getPosition();
             const posB = bodyB.getPosition();
+            const particleColor =
+                (isWallBody(bodyA) ? (wallNoteColor(bodyA.soundType) || bodyA.renderColor) : bodyA.renderColor) ||
+                (isWallBody(bodyB) ? (wallNoteColor(bodyB.soundType) || bodyB.renderColor) : bodyB.renderColor) ||
+                "#ffffff";
             spawnImpactParticles(
                 (posA.x + posB.x) / 2,
                 (posA.y + posB.y) / 2,
-                bodyA.renderColor || bodyB.renderColor || "#ffffff",
+                particleColor,
                 relativeVel
             );
         }
@@ -1122,7 +1146,11 @@ function updateLifespans() {
     let b = world.getBodyList();
     while (b) {
         const nextB = b.getNext();
-        if (b.lifespanMs && now - b.spawnedAtMs >= b.lifespanMs) {
+        if (
+            b.lifespanMs !== undefined &&
+            b.lifespanMs !== null &&
+            (b.spawnedAtMs === undefined || now - b.spawnedAtMs >= b.lifespanMs)
+        ) {
             const pos = b.getPosition();
             spawnImpactParticles(pos.x, pos.y, b.renderColor || "#ffffff", 3);
 
@@ -1288,8 +1316,8 @@ function renderEmitterBankBar() {
 function shortLabelForType(typeKey) {
     if (!typeKey) return "";
     const noteMap = {
-        note_do: "Do", note_re: "Re", note_mi: "Mi", note_fa: "Fa",
-        note_sol: "Sol", note_la: "La", note_si: "Si"
+        note_do: "Do", note_dod: "Do#", note_re: "Re", note_reb: "Re#", note_mi: "Mi", note_fa: "Fa",
+        note_fad: "Fa#", note_sol: "Sol", note_sold: "Sol#", note_la: "La", note_lad: "La#", note_si: "Si"
     };
     if (noteMap[typeKey]) return noteMap[typeKey];
     const shapeMap = {
@@ -1705,8 +1733,8 @@ function rectsOverlap(a, b) {
     return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
 }
 
-function positionEmitterPanel(target) {
-    const panel = document.getElementById("emitter-panel");
+function positionEmitterPanel(target, panelId) {
+    const panel = document.getElementById(panelId || "emitter-panel");
     if (!panel || !target) return;
 
     const margin = 12;
@@ -1751,8 +1779,12 @@ function positionEmitterPanel(target) {
 }
 
 function updateEmitterPanelPosition() {
-    if (_emitterPanelUserMoved) return;
-    if (currentEmitterPanelBody) positionEmitterPanel(currentEmitterPanelBody);
+    if (!_emitterPanelUserMoved) {
+        if (currentEmitterPanelBody) positionEmitterPanel(currentEmitterPanelBody);
+    }
+    if (currentWallPanelBody && !_wallPanelUserMoved) {
+        positionEmitterPanel(currentWallPanelBody, "wall-panel");
+    }
 }
 
 function syncEmitterPanel() {
@@ -1857,6 +1889,194 @@ function closeEmitterPanel() {
     _isDragPainting = false;
     stopPatternPlayheadRefresh();
     updateInstructionText();
+}
+
+// --- Pannello del muro: suono alla nota del piano ---
+// I muri piazzabili possono avere una nota assegnata (12 note cromatiche, tasti
+// bianchi e neri). Senza nota (suono "wall") mantengono il comportamento storico:
+// prendono in prestito il suono dell'oggetto che li tocca. La nota è salvata in
+// soundType, quindi viene già serializzata/ripristinata con le scene.
+
+let currentWallPanelBody = null;
+let _wallPanelUserMoved = false;
+let _wallPanelDragState = null;
+
+// Le 12 note del piano in ordine cromatico: key = tipo (per NOTE_FREQUENCIES e soundType),
+// sharp = tasto nero, label breve e label interna (Do (C), ecc.).
+const WALL_PIANO_NOTES = [
+    { key: "note_do", sharp: false, short: "Do", full: "Do (C)" },
+    { key: "note_dod", sharp: true, short: "Do#", full: "Do# (C#)" },
+    { key: "note_re", sharp: false, short: "Re", full: "Re (D)" },
+    { key: "note_reb", sharp: true, short: "Re#", full: "Re# (D#)" },
+    { key: "note_mi", sharp: false, short: "Mi", full: "Mi (E)" },
+    { key: "note_fa", sharp: false, short: "Fa", full: "Fa (F)" },
+    { key: "note_fad", sharp: true, short: "Fa#", full: "Fa# (F#)" },
+    { key: "note_sol", sharp: false, short: "Sol", full: "Sol (G)" },
+    { key: "note_sold", sharp: true, short: "Sol#", full: "Sol# (G#)" },
+    { key: "note_la", sharp: false, short: "La", full: "La (A)" },
+    { key: "note_lad", sharp: true, short: "La#", full: "La# (A#)" },
+    { key: "note_si", sharp: false, short: "Si", full: "Si (B)" }
+];
+
+// Offset orizzontale dei tasti neri rispetto ai 7 bianchi (percentuale):
+// ogni nero cavalca il bordo tra due bianchi adiacenti.
+const WALL_PIANO_BLACK_OFFSETS = [9, 23.3, 51.9, 66.2, 80.4];
+
+// Colore del muro in base alla nota assegnata: gradiente continuo dal
+// rosso-arancio (note basse, "calde") al viola/blu (note alte, "fredde").
+// Un muro senza nota (soundType "wall") non ha colore proprio: resta grigio.
+// Il colore è DERIVATO dalla nota (non salvato): così persiste con soundType
+// e non viene toccato da shiftHueColor/refreshRenderColors ai cambi tema.
+function wallNoteColor(soundType) {
+    const idx = WALL_PIANO_NOTES.findIndex((n) => n.key === soundType);
+    if (idx < 0) return null;
+    const t = idx / (WALL_PIANO_NOTES.length - 1);
+    const hue = 5 + t * 255;
+    return "hsl(" + Math.round(hue) + ", 75%, 62%)";
+}
+
+// Riconosce i muri (di bordo oppure piazzati): i muri del giocatore
+// non hanno isWall=true (riservato ai 4 bordi), ma sempre wallHalfW.
+function isWallBody(b) {
+    return !!(b && (b.wallHalfW || b.isWall));
+}
+
+function buildWallPiano() {
+    const host = document.getElementById("wall-piano");
+    if (!host) return;
+    host.innerHTML = "";
+    const whites = document.createElement("div");
+    whites.className = "piano-white-area";
+    let blackIdx = 0;
+    WALL_PIANO_NOTES.forEach((n) => {
+        if (n.sharp) return;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "piano-key key-white";
+        btn.dataset.note = n.key;
+        btn.title = n.full;
+        btn.textContent = n.short;
+        btn.onclick = () => setWallSound(n.key);
+        whites.appendChild(btn);
+    });
+    host.appendChild(whites);
+    const blacks = document.createElement("div");
+    blacks.className = "piano-black-area";
+    WALL_PIANO_NOTES.forEach((n) => {
+        if (!n.sharp) return;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "piano-key key-black";
+        btn.dataset.note = n.key;
+        btn.title = n.full;
+        btn.textContent = n.short;
+        btn.style.left = WALL_PIANO_BLACK_OFFSETS[blackIdx] + "%";
+        btn.onclick = () => setWallSound(n.key);
+        blacks.appendChild(btn);
+        blackIdx++;
+    });
+    host.appendChild(blacks);
+}
+
+function syncWallPanel() {
+    const panel = document.getElementById("wall-panel");
+    if (!panel) return;
+    const target = editingWallBody && !editingWallBody.isEmitter ? editingWallBody : null;
+    if (target) {
+        if (target !== currentWallPanelBody) {
+            currentWallPanelBody = target;
+            _wallPanelUserMoved = false;
+            renderWallPianoKeyState();
+        }
+        panel.style.visibility = "hidden";
+        panel.style.display = "flex";
+        if (!_wallPanelUserMoved) positionEmitterPanel(target, "wall-panel");
+        panel.style.visibility = "visible";
+    } else {
+        currentWallPanelBody = null;
+        panel.style.display = "none";
+    }
+}
+
+function renderWallPianoKeyState() {
+    const target = currentWallPanelBody;
+    document.querySelectorAll("#wall-piano .piano-key").forEach((el) => {
+        el.classList.toggle("active", !!(target && el.dataset.note === target.soundType));
+    });
+    const autoBtn = document.getElementById("btn-wall-sound-auto");
+    if (autoBtn) autoBtn.classList.toggle("active", !target || target.soundType === "wall");
+}
+
+function setWallSound(noteKey) {
+    const target = editingWallBody && !editingWallBody.isEmitter ? editingWallBody : null;
+    if (!target) return;
+    if (noteKey) {
+        const note = WALL_PIANO_NOTES.find((n) => n.key === noteKey);
+        if (!note) return;
+        target.soundType = noteKey;
+        renderWallPianoKeyState();
+        // Anteprima immediata della nota scelta (timbro clavicembalo, come il sequencer).
+        if (typeof playHarpsichordNote === "function") {
+            playHarpsichordNote(NOTE_FREQUENCIES[noteKey], 0.6);
+        }
+    } else {
+        target.soundType = "wall";
+        renderWallPianoKeyState();
+    }
+}
+
+function closeWallPanel() {
+    editingWallBody = null;
+    resizingWallHandle = null;
+    isDraggingWall = false;
+    updateInstructionText();
+}
+
+function initWallPanelDrag() {
+    const panel = document.getElementById("wall-panel");
+    if (!panel || panel._dragAttached) return;
+    const header = panel.querySelector(".wall-panel-header");
+    if (!header) return;
+    panel._dragAttached = true;
+
+    header.addEventListener("pointerdown", (e) => {
+        if (e.target.closest("button")) return;
+        if (e.button !== undefined && e.button !== 0) return;
+        const rect = panel.getBoundingClientRect();
+        _wallPanelDragState = {
+            startX: e.clientX,
+            startY: e.clientY,
+            startLeft: rect.left,
+            startTop: rect.top
+        };
+        _wallPanelUserMoved = true;
+        panel.classList.add("dragging");
+        e.preventDefault();
+    });
+
+    document.addEventListener("pointermove", (e) => {
+        if (!_wallPanelDragState) return;
+        const margin = 8;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const deltaX = e.clientX - _wallPanelDragState.startX;
+        const deltaY = e.clientY - _wallPanelDragState.startY;
+        let left = _wallPanelDragState.startLeft + deltaX;
+        let top = _wallPanelDragState.startTop + deltaY;
+        const panelW = panel.offsetWidth;
+        const panelH = panel.offsetHeight;
+        left = Math.min(Math.max(left, margin), Math.max(margin, vw - panelW - margin));
+        top = Math.min(Math.max(top, margin), Math.max(margin, vh - panelH - margin));
+        panel.style.left = left + "px";
+        panel.style.top = top + "px";
+    });
+
+    document.addEventListener("pointerup", () => {
+        if (_wallPanelDragState) {
+            _wallPanelDragState = null;
+            panel.classList.remove("dragging");
+        }
+    });
 }
 
 // --- Pannello emitter trascinabile ---

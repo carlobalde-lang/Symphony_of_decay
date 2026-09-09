@@ -30,6 +30,25 @@ const TRANSLATIONS = {
         "block-wall": "Wall",
         "timbre-label": "Timbre / Sound Type:",
         "scale-label": "Musical Scale:",
+        "btn-customize-timbre": "✨ Customize",
+        "cust-title": "✨ Customize Sound",
+        "cust-hint": "Tweak the current timbre with the sliders: changes apply live to every sound. Then give it a name and save: it joins the Timbre / Sound Type list.",
+        "cust-wave1": "Waveform 1 (main)",
+        "cust-wave2": "Waveform 2 (harmonic)",
+        "cust-sub": "Sub oscillator (octave down)",
+        "cust-filter": "Filter type",
+        "cust-cutoff": "Filter cutoff",
+        "cust-resonance": "Filter resonance",
+        "cust-attack": "Attack (s)",
+        "cust-decay": "Decay / tail (s)",
+        "cust-name-placeholder": "Name your timbre…",
+        "cust-save": "💾 Save Timbre",
+        "cust-saved": "✓ Timbre saved",
+        "cust-use": "✔ Use",
+        "cust-your": "Your custom timbres:",
+        "cust-delete": "🗑️",
+        "cust-empty": "No custom timbres yet.",
+        "cust-warn-name": "Write a name first.",
         "interactive-tools": "Interactive Tools:",
         "tool-rope": "🧵 Rope",
         "tool-chain": "⛓️ Rigid Chain",
@@ -82,7 +101,7 @@ const TRANSLATIONS = {
         "inst-wall":
             "Wall Mode: Click empty space to create a wall. Drag arrows to resize, blue circle to rotate. Click elsewhere to confirm. Double tap an existing wall to edit it again.",
         "inst-wall-edit":
-            "Drag arrows to resize, blue circle to rotate, or drag the wall body to move it. Click elsewhere to confirm.",
+            "Drag arrows to resize, blue circle to rotate, or drag the wall body to move it. Use the panel to set its sound. Click elsewhere to confirm.",
         "inst-bar": "Rigid Bar Mode: Click two points, or click-drag between two points.",
         "inst-rope": "Rope Mode: Click two points, or click-drag between two points.",
         "inst-chain": "Rigid Chain Mode: Click two points, or click-drag between two points.",
@@ -126,6 +145,17 @@ const TRANSLATIONS = {
         "emitter-lifetime-infinite": "∞",
         "emitter-pause": "⏸️ Pause Emitter",
         "emitter-resume": "▶️ Resume Emitter",
+        "block-echo": "⚪ Echo Sphere",
+        "obj-echo": "⚪ Echo Sphere",
+        "wall-panel-title": "🧱 Wall Sound",
+        "wall-panel-close": "✕ Close",
+        "wall-panel-hint": "Choose the note this wall plays when touched. Tap a key to hear it instantly. The wall takes the note's color: warm colors for low notes, cold for high ones. Gray = no sound of its own.",
+        "wall-sound-auto": "🎼 Auto (no own sound)",
+        "obj-note_dod": "🔘 Note Do# (C#)",
+        "obj-note_reb": "🔘 Note Re# (D#)",
+        "obj-note_fad": "🔘 Note Fa# (F#)",
+        "obj-note_sold": "🔘 Note Sol# (G#)",
+        "obj-note_lad": "🔘 Note La# (A#)",
         "emitter-sync-label": "🎼 Sync to Global Clock",
         "emitter-sync-division-label": "Note Division",
         "global-clock-bpm-label": "Global Clock BPM",
@@ -174,6 +204,25 @@ const TRANSLATIONS = {
         "block-wall": "Muro",
         "timbre-label": "Timbro / Tipo Suono:",
         "scale-label": "Scala Musicale:",
+        "btn-customize-timbre": "✨ Personalizza",
+        "cust-title": "✨ Personalizza Suono",
+        "cust-hint": "Regola il timbro attivo con gli slider: le modifiche si applicano subito a tutti i suoni. Poi dagli un nome e salvalo: entra nell'elenco Timbre / Sound Type.",
+        "cust-wave1": "Forma d'onda 1 (principale)",
+        "cust-wave2": "Forma d'onda 2 (armonica)",
+        "cust-sub": "Oscillatore sub (ottava sotto)",
+        "cust-filter": "Tipo filtro",
+        "cust-cutoff": "Taglio filtro",
+        "cust-resonance": "Risonanza filtro",
+        "cust-attack": "Attacco (s)",
+        "cust-decay": "Decadimento / coda (s)",
+        "cust-name-placeholder": "Dai un nome al timbro…",
+        "cust-save": "💾 Salva Timbro",
+        "cust-saved": "✓ Timbro salvato",
+        "cust-use": "✔ Usa",
+        "cust-your": "I tuoi timbri personalizzati:",
+        "cust-delete": "🗑️",
+        "cust-empty": "Nessun timbro personalizzato.",
+        "cust-warn-name": "Scrivi prima un nome.",
         "interactive-tools": "Strumenti Interattivi:",
         "tool-rope": "🧵 Corda",
         "tool-chain": "⛓️ Catena Rigida",
@@ -226,7 +275,7 @@ const TRANSLATIONS = {
         "inst-wall":
             "Modo Muro: Clicca a vuoto per creare un muro. Trascina le frecce per ridimensionarlo, il cerchio blu per ruotarlo. Clicca altrove per confermare. Doppio tap su un muro esistente per modificarlo di nuovo.",
         "inst-wall-edit":
-            "Trascina le frecce per ridimensionare, il cerchio blu per ruotare, oppure trascina il corpo del muro per spostarlo. Clicca altrove per confermare.",
+            "Trascina le frecce per ridimensionare, il cerchio blu per ruotare, oppure trascina il corpo del muro per spostarlo. Usa il pannello per impostarne il suono. Clicca altrove per confermare.",
         "inst-bar": "Modo Barra Rigida: Clicca due punti, oppure clicca e trascina tra due punti.",
         "inst-rope": "Modo Corda: Clicca due punti, oppure clicca e trascina tra due punti.",
         "inst-chain": "Modo Catena Rigida: Clicca due punti, oppure clicca e trascina tra due punti.",
@@ -270,6 +319,17 @@ const TRANSLATIONS = {
         "emitter-lifetime-infinite": "∞",
         "emitter-pause": "⏸️ Pausa Emettitore",
         "emitter-resume": "▶️ Riprendi Emettitore",
+        "block-echo": "⚪ Sfera Eco",
+        "obj-echo": "⚪ Sfera Eco",
+        "wall-panel-title": "🧱 Suono del Muro",
+        "wall-panel-close": "✕ Chiudi",
+        "wall-panel-hint": "Scegli la nota che questo muro suona quando viene toccato. Tocca un tasto per ascoltarla subito. Il muro prende il colore della nota: colori caldi per le note basse, freddi per le alte. Grigio = nessun suono proprio.",
+        "wall-sound-auto": "🎼 Auto (nessun suono proprio)",
+        "obj-note_dod": "🔘 Nota Do# (C#)",
+        "obj-note_reb": "🔘 Nota Re# (D#)",
+        "obj-note_fad": "🔘 Nota Fa# (F#)",
+        "obj-note_sold": "🔘 Nota Sol# (G#)",
+        "obj-note_lad": "🔘 Nota La# (A#)",
         "emitter-sync-label": "🎼 Sincronizza al Clock Globale",
         "emitter-sync-division-label": "Divisione Ritmica",
         "global-clock-bpm-label": "BPM Clock Globale",
@@ -320,12 +380,17 @@ function updateUILanguage() {
     if (helpModal && helpModal.style.display !== "none" && typeof buildHelpHTML === "function") {
         document.getElementById("help-content").innerHTML = buildHelpHTML();
     }
+    const custModal = document.getElementById("customize-modal");
+    if (custModal && custModal.style.display !== "none" && typeof buildCustomizerContent === "function") {
+        buildCustomizerContent();
+    }
 }
 
 function updateInstructionText() {
     const el = document.getElementById("instruction-mode");
     const shortcutEl = document.getElementById("instruction-shortcuts");
     syncEmitterPanel();
+    syncWallPanel();
     if (!el) return;
     const setShortcuts = (text) => {
         if (shortcutEl) shortcutEl.innerText = text || "";
