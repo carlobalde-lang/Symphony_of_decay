@@ -209,18 +209,12 @@ function sanitizeTimbreDef(t) {
 }
 
 function getStoredCustomTimbres() {
-    try {
-        const arr = JSON.parse(localStorage.getItem(CUSTOM_TIMBRES_KEY) || "[]");
-        return Array.isArray(arr) ? arr : [];
-    } catch (e) {
-        return [];
-    }
+    const arr = storageGetJson(CUSTOM_TIMBRES_KEY, []);
+    return Array.isArray(arr) ? arr : [];
 }
 
 function saveStoredCustomTimbres(arr) {
-    try {
-        localStorage.setItem(CUSTOM_TIMBRES_KEY, JSON.stringify(arr));
-    } catch (e) {}
+    storageSet(CUSTOM_TIMBRES_KEY, arr);
 }
 
 function isCustomTimbreKey(key) {

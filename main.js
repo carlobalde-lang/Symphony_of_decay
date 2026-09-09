@@ -420,7 +420,7 @@ migrateOldSingleSave();
 refreshSceneList();
 populateScaleSelect();
 populateTimbreSelect();
-applyTheme(localStorage.getItem("symphony-theme") || "dark");
+applyTheme(storageGet("symphony-theme", "dark") || "dark");
 updateUILanguage();
 autosaveStartInterval();
 restoreLastSessionIfAny();
@@ -469,11 +469,11 @@ const HELP_SECTIONS = {
         },
         {
             title: "🧩 Spawnable Objects",
-            html: `<ul><li><b>Shapes</b> — geometric blocks with different bounciness: Orolite (hard, low bounce), Pentacore, Hexarun, Septifor, Octavox, Astral (light, super bouncy).</li><li><b>Musical Notes</b> — the spheres Do–Si: each one always sings its own fixed pitch.</li><li><b>Instruments</b> — Kick, Snare, Hi-Hat (closed / open), Clap, Conga, Bongo, Clave: synthesized drums on impact.</li><li><b>Wall</b> — static editable rectangle, handy as a platform.</li><li><b>Emitter</b> — periodically shoots objects in its direction (see "Emitters").</li></ul><p class="help-tip">On touch devices, spawned objects are half the size for easier handling.</p>`,
+            html: `<ul><li><b>Shapes</b> — geometric blocks with different bounciness: Orolite (hard, low bounce), Pentacore, Hexarun, Septifor, Octavox, Astral (light, super bouncy).</li><li><b>Musical Notes</b> — the spheres Do–Si: each one sings its own fixed pitch; choose the octave (3–5) with “Spawn Octave” in the toolbar.</li><li><b>Instruments</b> — Kick, Snare, Hi-Hat (closed / open), Clap, Conga, Bongo, Clave: synthesized drums on impact.</li><li><b>Wall</b> — static editable rectangle, handy as a platform.</li><li><b>Echo</b> — a grey sphere with no sound of its own: it echoes the tone of whatever hits it (two echoes colliding stay silent).</li><li><b>Emitter</b> — periodically shoots objects in its direction (see "Emitters").</li></ul><p class="help-tip">On touch devices, spawned objects are half the size for easier handling.</p>`,
         },
         {
             title: "🧱 Walls",
-            html: `<ul><li><b>Perimeter walls</b> — press and drag one of the grey borders to resize the playfield; the position is saved with the scene.</li><li><b>Editing a wall</b> — spawn a Wall, then double tap on it or click it. Drag the arrows to resize, the blue circle to rotate (or use the wheel), and drag the wall body to move it.</li><li><b>Emitters</b> — edited the same way but only rotation.</li></ul>`,
+            html: `<ul><li><b>Perimeter walls</b> — press and drag one of the grey borders to resize the playfield; the position is saved with the scene.</li><li><b>Editing a wall</b> — spawn a Wall, then double tap on it or click it. Drag the arrows to resize, the blue circle to rotate (or use the wheel), and drag the wall body to move it.</li><li><b>Wall sound</b> — while editing a wall, use the 🧱 panel: press a piano key (12 chromatic notes, black keys included) to give the wall its own note; pick the register with the Octave row (3–5). The wall takes the note's color — warm for low notes, cold for high. <b>Auto</b> returns it to grey, with no sound of its own (it borrows the tone of whatever hits it). The note is saved with the scene.</li><li><b>Emitters</b> — edited the same way but only rotation.</li></ul>`,
         },
         {
             title: "🔗 Rope / Chain / Bar",
@@ -489,7 +489,7 @@ const HELP_SECTIONS = {
         },
         {
             title: "🎯 Emitters",
-            html: `<ul><li>Each emitter shows a <b>pause badge ▶/⏸</b> on its corner: tap it to start or stop it.</li><li>Select the emitter to open its panel: <b>Fires</b> (which object), <b>Launch Power</b>, <b>Fire Rate (BPM)</b>, <b>Swing</b>, <b>Lifetime</b> (0 = infinite).</li><li><b>Sequencer / Drum Machine</b> — drop instruments on the 8/16/32 steps; presets included. Click a filled step to cycle velocity, drag to paint many.</li><li><b>Sync to Global Clock</b> — locks the emitter to the global tempo and grid; when resumed from pause it joins the others in sync.</li></ul>`,
+            html: `<ul><li>Each emitter shows a <b>pause badge ▶/⏸</b> on its corner: tap it to start or stop it.</li><li>Select the emitter to open its panel: <b>Fires</b> (which object), <b>Launch Power</b>, <b>Fire Rate (BPM)</b>, <b>Swing</b>, <b>Lifetime</b> (0 = infinite).</li><li><b>Sequencer / Drum Machine</b> — drop instruments on the 8/16/32 steps; presets included. Click a filled step to cycle velocity, drag to paint many.</li><li><b>Sync to Global Clock</b> — locks the emitter to the global tempo and grid; when resumed from pause it joins the others in sync.</li><li><b>Pattern Banks</b> — store several sequences on the same emitter and switch between them; chain playback can cycle through them.</li><li><b>Aging sound</b> — objects fired with a Lifetime turn muffled and quieter as their life runs out.</li></ul>`,
         },
         {
             title: "🌍 Physics",
@@ -497,7 +497,7 @@ const HELP_SECTIONS = {
         },
         {
             title: "🔊 Audio",
-            html: `<ul><li><b>Record Session</b> — records the output and saves a small compressed audio file (Opus).</li><li><b>Timbre / Sound Type</b> and <b>Musical Scale</b> selectors.</li><li><b>Reverb</b> and <b>Delay</b> amounts; <b>Rhythmic Quantization</b> with adjustable <b>BPM</b>.</li><li><b>Volume Mixer</b> — master and per-type volumes.</li></ul>`,
+            html: `<ul><li><b>Record Session</b> — records the output and saves a small compressed audio file (Opus).</li><li><b>Timbre / Sound Type</b> and <b>Musical Scale</b> selectors.</li><li><b>Reverb</b> and <b>Delay</b> amounts; <b>Rhythmic Quantization</b> with adjustable <b>BPM</b>.</li><li><b>Volume Mixer</b> — master and per-type volumes.</li><li><b>✨ Customize</b> — tune the current timbre live (waveform, filter, envelope) and save it: your custom timbre joins the Timbre list.</li></ul>`,
         },
         {
             title: "🎨 Graphics",
@@ -523,11 +523,11 @@ const HELP_SECTIONS = {
         },
         {
             title: "🧩 Oggetti Creabili",
-            html: `<ul><li><b>Forme</b> — blocchi geometrici con elasticità diversa: Orolite (duro, rimbalza poco), Pentacore, Hexarun, Septifor, Octavox, Astral (leggero, springata).</li><li><b>Note Musicali</b> — le sfere Do–Si: ognuna canta sempre la sua nota fissa.</li><li><b>Strumenti</b> — Kick, Rullante, Hi-Hat (chiusa/aperta), Clap, Conga, Bongo, Claves: tamburi sintetizzati all'impatto.</li><li><b>Muro</b> — rettangolo statico modificabile, utile come piattaforma.</li><li><b>Emettitore</b> — spara oggetti periodicamente nella sua direzione (vedi "Emettitori").</li></ul><p class="help-tip">Sui dispositivi touch gli oggetti creati sono grandi la metà per facilitarne l'uso.</p>`,
+            html: `<ul><li><b>Forme</b> — blocchi geometrici con elasticità diversa: Orolite (duro, rimbalza poco), Pentacore, Hexarun, Septifor, Octavox, Astral (leggero, springata).</li><li><b>Note Musicali</b> — le sfere Do–Si: ognuna canta la sua nota fissa; scegli l'ottava (3–5) con "Ottava di Spawn" nella toolbar.</li><li><b>Strumenti</b> — Kick, Rullante, Hi-Hat (chiusa/aperta), Clap, Conga, Bongo, Claves: tamburi sintetizzati all'impatto.</li><li><b>Muro</b> — rettangolo statico modificabile, utile come piattaforma.</li><li><b>Eco</b> — sfera grigia senza suono proprio: ripete il suono di chi la colpisce (due echo insieme restano mute).</li><li><b>Emettitore</b> — spara oggetti periodicamente nella sua direzione (vedi "Emettitori").</li></ul><p class="help-tip">Sui dispositivi touch gli oggetti creati sono grandi la metà per facilitarne l'uso.</p>`,
         },
         {
             title: "🧱 Muri",
-            html: `<ul><li><b>Muri perimetrali</b> — premi e trascina uno dei bordi grigi per ridimensionare l'area di gioco; la posizione viene salvata con la scena.</li><li><b>Modifica di un muro</b> — crea un Muro, poi toccalelo due volte o cliccalo. Trascina le frecce per ridimensionare, il cerchio blu per ruotare (o usa la rotella), e il corpo del muro per spostarlo.</li><li><b>Emettitori</b> — si modificano allo stesso modo ma solo in rotazione.</li></ul>`,
+            html: `<ul><li><b>Muri perimetrali</b> — premi e trascina uno dei bordi grigi per ridimensionare l'area di gioco; la posizione viene salvata con la scena.</li><li><b>Modifica di un muro</b> — crea un Muro, poi toccalelo due volte o cliccalo. Trascina le frecce per ridimensionare, il cerchio blu per ruotare (o usa la rotella), e il corpo del muro per spostarlo.</li><li><b>Suono del muro</b> — durante la modifica, usa il pannello 🧱: premi un tasto del piano (12 note cromatiche, neri inclusi) per dare al muro la sua nota; scegli il registro con la riga Ottava (3–5). Il muro prende il colore della nota — caldo per le note basse, freddo per le alte. <b>Auto</b> lo riporta grigio, senza suono proprio (prende in prestito quello di chi lo tocca). La nota viene salvata con la scena.</li><li><b>Emettitori</b> — si modificano allo stesso modo ma solo in rotazione.</li></ul>`,
         },
         {
             title: "🔗 Corde / Catene / Barre",
@@ -543,7 +543,7 @@ const HELP_SECTIONS = {
         },
         {
             title: "🎯 Emettitori",
-            html: `<ul><li>Ogni emettitore mostra un <b>badge di pausa ▶/⏸</b> nell'angolo: toccalo per avviarlo o fermarlo.</li><li>Seleziona l'emettitore per aprire il pannello: <b>Spara</b> (quale oggetto), <b>Potenza</b>, <b>Cadenza (BPM)</b>, <b>Swing</b>, <b>Durata</b> (0 = infinito).</li><li><b>Sequencer / Drum Machine</b> — piazza strumenti sugli step da 8/16/32; ci sono i preset. Clicca uno step pieno per ciclare la velocità, trascina per dipingerne tanti.</li><li><b>Sincronizza al Clock Globale</b> — blocca l'emettitore sul tempo globale e sulla griglia; alla ripresa dalla pausa entra in sincrono con gli altri.</li></ul>`,
+            html: `<ul><li>Ogni emettitore mostra un <b>badge di pausa ▶/⏸</b> nell'angolo: toccalo per avviarlo o fermarlo.</li><li>Seleziona l'emettitore per aprire il pannello: <b>Spara</b> (quale oggetto), <b>Potenza</b>, <b>Cadenza (BPM)</b>, <b>Swing</b>, <b>Durata</b> (0 = infinito).</li><li><b>Sequencer / Drum Machine</b> — piazza strumenti sugli step da 8/16/32; ci sono i preset. Clicca uno step pieno per ciclare la velocità, trascina per dipingerne tanti.</li><li><b>Sincronizza al Clock Globale</b> — blocca l'emettitore sul tempo globale e sulla griglia; alla ripresa dalla pausa entra in sincrono con gli altri.</li><li><b>Librerie di Pattern</b> — salva più sequenze sullo stesso emettitore e passa dall'una all'altra; la riproduzione in catena le cicla in sequenza.</li><li><b>Suono che invecchia</b> — gli oggetti sparati con una Durata si spengono (ovattati, più bassi) man mano che la vita finisce.</li></ul>`,
         },
         {
             title: "🌍 Fisica",
@@ -551,7 +551,7 @@ const HELP_SECTIONS = {
         },
         {
             title: "🔊 Audio",
-            html: `<ul><li><b>Registra Sessione</b> — registra l'uscita e salva un file audio compresso e leggero (Opus).</li><li>Selettori <b>Timbre / Tipo di Suono</b> e <b>Scala Musicale</b>.</li><li><b>Reverb</b> e <b>Delay</b>; <b>Quantizzazione Ritmica</b> con <b>BPM</b> regolabile.</li><li><b>Mixer Volume</b> — volume master e per tipo.</li></ul>`,
+            html: `<ul><li><b>Registra Sessione</b> — registra l'uscita e salva un file audio compresso e leggero (Opus).</li><li>Selettori <b>Timbre / Tipo di Suono</b> e <b>Scala Musicale</b>.</li><li><b>Reverb</b> e <b>Delay</b>; <b>Quantizzazione Ritmica</b> con <b>BPM</b> regolabile.</li><li><b>Mixer Volume</b> — volume master e per tipo.</li><li><b>✨ Personalizza</b> — regola il timbro attivo in tempo reale (forma d'onda, filtro, inviluppo) e salvalo: il tuo timbro personalizzato entra nell'elenco Timbre.</li></ul>`,
         },
         {
             title: "🎨 Grafica",

@@ -126,9 +126,10 @@ function applyTheme(name) {
     } else if (name !== "dark") {
         document.body.classList.add("theme-" + name);
     }
-    localStorage.setItem("symphony-theme", name);
+    storageSet("symphony-theme", name);
     const sel = document.getElementById("theme-select");
     if (sel) sel.value = name;
+    if (typeof invalidateBgVarCache === "function") invalidateBgVarCache();
     refreshRenderColors();
 }
 

@@ -167,6 +167,11 @@ function getBgVars() {
     return _bgVarCache;
 }
 
+function invalidateBgVarCache() {
+    _bgVarCache = null;
+    _bgVarCacheKey = null;
+}
+
 function drawJapaneseBackground() {
     const bg = getBgVars();
     bgCtx.clearRect(0, 0, logicalWidth, logicalHeight);

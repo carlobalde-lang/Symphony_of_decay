@@ -341,25 +341,22 @@ const SAVE_KEY = "symphonyOfDecay_scenes";
 const OLD_SAVE_KEY = "symphonyOfDecay_savedScene";
 
 function getSavedScenes() {
-    try {
-        return JSON.parse(localStorage.getItem(SAVE_KEY) || "{}");
-    } catch (e) {
-        return {};
-    }
+    const parsed = storageGetJson(SAVE_KEY, {});
+    return parsed && typeof parsed === "object" ? parsed : {};
 }
 
 function migrateOldSingleSave() {
-    const old = localStorage.getItem(OLD_SAVE_KEY);
+    const old = storageGet(OLD_SAVE_KEY, null);
     if (!old) return;
     try {
         const data = JSON.parse(old);
         const scenes = getSavedScenes();
         if (!scenes["Salvataggio precedente"]) {
             scenes["Salvataggio precedente"] = data;
-            localStorage.setItem(SAVE_KEY, JSON.stringify(scenes));
+            storageSet(SAVE_KEY, scenes);
         }
     } catch (e) {}
-    localStorage.removeItem(OLD_SAVE_KEY);
+    storageRemove(OLD_SAVE_KEY);
 }
 
 function refreshSceneList() {
@@ -405,7 +402,7 @@ function saveScene() {
         }
         const data = serializeScene();
         scenes[trimmed] = data;
-        localStorage.setItem(SAVE_KEY, JSON.stringify(scenes));
+        storageSet(SAVE_KEY, scenes);
         refreshSceneList();
         const sel = document.getElementById("scene-select");
         if (sel) sel.value = trimmed;
@@ -445,7 +442,7 @@ function deleteScene() {
     if (!confirm(`Delete scene "${name}"?`)) return;
     const scenes = getSavedScenes();
     delete scenes[name];
-    localStorage.setItem(SAVE_KEY, JSON.stringify(scenes));
+    storageSet(SAVE_KEY, scenes);
     refreshSceneList();
     flashMessage(`🗑️ "${name}" deleted`, "#ffa502");
 }
@@ -456,13 +453,13 @@ const AUTOSAVE_KEY = "symphonyOfDecay_autosave";
 function autosaveNow() {
     try {
         const data = serializeScene();
-        localStorage.setItem(AUTOSAVE_KEY, JSON.stringify({ savedAt: Date.now(), data }));
+        storageSet(AUTOSAVE_KEY, { savedAt: Date.now(), data });
     } catch (e) {}
 }
 
 function getAutosave() {
     try {
-        const raw = localStorage.getItem(AUTOSAVE_KEY);
+        const raw = storageGet(AUTOSAVE_KEY, null);
         if (!raw) return null;
         const parsed = JSON.parse(raw);
         return parsed.data && Array.isArray(parsed.data.bodies) ? parsed.data : null;
