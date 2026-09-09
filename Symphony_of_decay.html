@@ -103,6 +103,12 @@
                                 <button class="block-btn note-btn" id="btn-note_la" onclick="selectBlock('note_la')">🟣 La</button>
                                 <button class="block-btn note-btn" id="btn-note_si" onclick="selectBlock('note_si')">🟪 Si</button>
                             </div>
+                            <div class="wall-octave-row note-octave-row">
+                                <span class="octave-label" data-i18n="note-octave-label">Spawn Octave</span>
+                                <button class="sub-btn note-octave-btn" data-octave="3" onclick="setSpawnNoteOctave(3)">3</button>
+                                <button class="sub-btn note-octave-btn" data-octave="4" onclick="setSpawnNoteOctave(4)">4</button>
+                                <button class="sub-btn note-octave-btn" data-octave="5" onclick="setSpawnNoteOctave(5)">5</button>
+                            </div>
                         </div>
                     </details>
                     <details class="accordion sub-accordion">
@@ -762,6 +768,12 @@
                 The wall takes the note's color: warm for low notes, cold for high ones. Gray = no own sound.
             </p>
             <div id="wall-piano" class="piano-row"></div>
+            <div class="wall-octave-row">
+                <span class="octave-label" data-i18n="wall-octave-label">Octave</span>
+                <button class="sub-btn octave-btn" data-octave="3" onclick="setWallOctave(3)">3</button>
+                <button class="sub-btn octave-btn" data-octave="4" onclick="setWallOctave(4)">4</button>
+                <button class="sub-btn octave-btn" data-octave="5" onclick="setWallOctave(5)">5</button>
+            </div>
             <button class="sub-btn" id="btn-wall-sound-auto" onclick="setWallSound('')" data-i18n="wall-sound-auto">
                 🎼 Auto
             </button>

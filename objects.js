@@ -294,7 +294,7 @@ let _dragStartIndex = -1;
 let _justDragged = false;
 const DRAG_THRESHOLD = 6; // px di movimento necessario per attivare il drag-paint
 
-function spawnElement(x, y, typeKey) {
+function spawnElement(x, y, typeKey, useSpawnOctave) {
     const cfg = blockConfigs[typeKey];
     const currentDrag = _cachedDrag;
     const s = SPAWN_SCALE;
@@ -355,6 +355,9 @@ function spawnElement(x, y, typeKey) {
 
     body.setLinearDamping(currentDrag);
     body.soundType = cfg.name;
+    if (cfg.name && cfg.name.indexOf("note_") === 0 && useSpawnOctave !== false && spawnNoteOctave !== 4) {
+        body.soundType = cfg.name + "_" + spawnNoteOctave;
+    }
     body.baseColor = cfg.color;
     body.renderColor = shiftHueColor(cfg.color);
     return body;
@@ -853,7 +856,17 @@ world.on("begin-contact", (contact) => {
             else effectiveMass = massA > 0 ? massA : massB > 0 ? massB : 1;
             const impactIntensity = relativeVel * Math.sqrt(effectiveMass);
 
-            playMixedSound(soundA, soundB, impactIntensity);
+            // Decadimento sonoro con l'età: un oggetto con durata limitata, man mano
+            // che si avvicina alla fine della sua vita, suona sempre più "spento"
+            // (filtro chiuso e volume attenuato). Nel tema della "Sinfonia della Decadenza".
+            const bodyDecay = (bd) => {
+                if (!bd || !bd.lifespanMs || bd.spawnedAtMs === undefined) return 0;
+                const ratio = (Date.now() - bd.spawnedAtMs) / bd.lifespanMs;
+                return ratio > 1 ? 1 : ratio < 0 ? 0 : ratio;
+            };
+            const decayRatio = Math.max(bodyDecay(bodyA), bodyDecay(bodyB));
+
+            playMixedSound(soundA, soundB, impactIntensity, decayRatio);
             const posA = bodyA.getPosition();
             const posB = bodyB.getPosition();
             const particleColor =
@@ -1117,7 +1130,7 @@ function updateEmitters() {
         const spawnPoint = b.getWorldPoint(planck.Vec2(0, -muzzleOffset));
         const forward = b.getWorldVector(planck.Vec2(0, -1));
 
-        const projectile = spawnElement(spawnPoint.x, spawnPoint.y, spawnType);
+        const projectile = spawnElement(spawnPoint.x, spawnPoint.y, spawnType, false);
         projectile.spawnX = spawnPoint.x;
         projectile.spawnY = spawnPoint.y;
         projectile.spawnRadius = ((cfg.radius || cfg.size || cfg.h / 2 || 20) * SPAWN_SCALE) / SCALE;
@@ -1138,6 +1151,8 @@ function updateEmitters() {
         }
     }
 }
+
+
 
 // --- Ciclo di vita degli oggetti con durata limitata (sparati dagli emettitori) ---
 
@@ -1320,6 +1335,8 @@ function shortLabelForType(typeKey) {
         note_fad: "Fa#", note_sol: "Sol", note_sold: "Sol#", note_la: "La", note_lad: "La#", note_si: "Si"
     };
     if (noteMap[typeKey]) return noteMap[typeKey];
+    const m = /^(note_[a-z]+)_(\d+)$/.exec(typeKey);
+    if (m && noteMap[m[1]]) return noteMap[m[1]] + " " + m[2];
     const shapeMap = {
         bass: "Oro", wood: "Pen", mid: "Hex",
         rubber: "Sep", high: "Oct", neon: "Ast"
@@ -1535,7 +1552,8 @@ function startPatternPlayheadRefresh() {
     _patternPlayheadTimer = setInterval(() => {
         if (currentEmitterPanelBody && document.getElementById("emitter-panel")?.style.display !== "none") {
             updatePlayheadHighlight();
-        } else {
+        }
+        if (!currentEmitterPanelBody) {
             stopPatternPlayheadRefresh();
         }
     }, 120);
@@ -1900,6 +1918,10 @@ function closeEmitterPanel() {
 let currentWallPanelBody = null;
 let _wallPanelUserMoved = false;
 let _wallPanelDragState = null;
+// Ottava di default per i muri (pannello) e per le sfere-nota piazzate a mano
+// (selettore in toolbar). Il suffisso "_N" viene codificato nel soundType.
+let _currentWallOctave = 4;
+let spawnNoteOctave = 4;
 
 // Le 12 note del piano in ordine cromatico: key = tipo (per NOTE_FREQUENCIES e soundType),
 // sharp = tasto nero, label breve e label interna (Do (C), ecc.).
@@ -1923,16 +1945,34 @@ const WALL_PIANO_NOTES = [
 const WALL_PIANO_BLACK_OFFSETS = [9, 23.3, 51.9, 66.2, 80.4];
 
 // Colore del muro in base alla nota assegnata: gradiente continuo dal
-// rosso-arancio (note basse, "calde") al viola/blu (note alte, "fredde").
+// rosso-arancio (note basse, "calde") al blu puro (note alte, "fredde").
+// La tinta si ferma a 240° (blu) — oltre scivolerebbe nel viola/magenta
+// che percettivamente torna "caldo" — e la luminosità cresce con l'altezza,
+// così il Si è il più freddo (azzurro ghiaccio) e il Do il più caldo.
 // Un muro senza nota (soundType "wall") non ha colore proprio: resta grigio.
 // Il colore è DERIVATO dalla nota (non salvato): così persiste con soundType
 // e non viene toccato da shiftHueColor/refreshRenderColors ai cambi tema.
+// L'altezza tiene conto anche dell'ottava codificata nel tipo ("note_do_5"):
+// un ottava più alta sposta il colore verso il freddo sullo stesso registro.
+function stripOctaveNote(type) {
+    const m = /^(note_[a-z]+)(?:_(\d+))?$/.exec(type);
+    return m ? m[1] : null;
+}
+
+function noteOctaveOf(type) {
+    const m = /^note_[a-z]+_(\d+)$/.exec(type);
+    return m ? parseInt(m[1], 10) : 4;
+}
+
 function wallNoteColor(soundType) {
-    const idx = WALL_PIANO_NOTES.findIndex((n) => n.key === soundType);
+    const base = stripOctaveNote(soundType);
+    const idx = WALL_PIANO_NOTES.findIndex((n) => n.key === base);
     if (idx < 0) return null;
-    const t = idx / (WALL_PIANO_NOTES.length - 1);
-    const hue = 5 + t * 255;
-    return "hsl(" + Math.round(hue) + ", 75%, 62%)";
+    const octave = noteOctaveOf(soundType);
+    const t = ((octave - 3) + idx / 12) / 3;
+    const hue = 10 + t * 230;
+    const lightness = 58 + t * 12;
+    return "hsl(" + Math.round(hue) + ", 78%, " + Math.round(lightness) + "%)";
 }
 
 // Riconosce i muri (di bordo oppure piazzati): i muri del giocatore
@@ -2000,11 +2040,45 @@ function syncWallPanel() {
 
 function renderWallPianoKeyState() {
     const target = currentWallPanelBody;
+    const targetNote = target ? stripOctaveNote(target.soundType) : null;
     document.querySelectorAll("#wall-piano .piano-key").forEach((el) => {
-        el.classList.toggle("active", !!(target && el.dataset.note === target.soundType));
+        el.classList.toggle("active", !!(target && el.dataset.note === targetNote));
     });
     const autoBtn = document.getElementById("btn-wall-sound-auto");
     if (autoBtn) autoBtn.classList.toggle("active", !target || target.soundType === "wall");
+    renderWallOctaveState();
+}
+
+function renderWallOctaveState() {
+    const target = currentWallPanelBody;
+    const oct = target && target.soundType !== "wall" ? noteOctaveOf(target.soundType) : _currentWallOctave;
+    document.querySelectorAll("#wall-panel .octave-btn").forEach((btn) => {
+        btn.classList.toggle("active", parseInt(btn.dataset.octave, 10) === oct);
+    });
+}
+
+function setWallOctave(oct) {
+    const target = editingWallBody && !editingWallBody.isEmitter ? editingWallBody : null;
+    oct = Math.max(2, Math.min(6, parseInt(oct, 10) || 4));
+    _currentWallOctave = oct;
+    if (target && target.soundType !== "wall") {
+        const base = stripOctaveNote(target.soundType);
+        if (base) {
+            target.soundType = base + "_" + oct;
+            if (typeof playHarpsichordNote === "function" && typeof noteFrequencyForType === "function") {
+                playHarpsichordNote(noteFrequencyForType(target.soundType), 0.6);
+            }
+        }
+    }
+    renderWallPianoKeyState();
+}
+
+function setSpawnNoteOctave(oct) {
+    oct = Math.max(2, Math.min(6, parseInt(oct, 10) || 4));
+    spawnNoteOctave = oct;
+    document.querySelectorAll(".note-octave-btn").forEach((btn) => {
+        btn.classList.toggle("active", parseInt(btn.dataset.octave, 10) === spawnNoteOctave);
+    });
 }
 
 function setWallSound(noteKey) {
@@ -2013,11 +2087,11 @@ function setWallSound(noteKey) {
     if (noteKey) {
         const note = WALL_PIANO_NOTES.find((n) => n.key === noteKey);
         if (!note) return;
-        target.soundType = noteKey;
+        target.soundType = noteKey + "_" + _currentWallOctave;
         renderWallPianoKeyState();
         // Anteprima immediata della nota scelta (timbro clavicembalo, come il sequencer).
-        if (typeof playHarpsichordNote === "function") {
-            playHarpsichordNote(NOTE_FREQUENCIES[noteKey], 0.6);
+        if (typeof playHarpsichordNote === "function" && typeof noteFrequencyForType === "function") {
+            playHarpsichordNote(noteFrequencyForType(target.soundType), 0.6);
         }
     } else {
         target.soundType = "wall";

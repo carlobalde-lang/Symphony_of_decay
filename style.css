@@ -669,6 +669,22 @@
                 color: #2f3542;
                 border-color: #f1c40f;
             }
+            .wall-octave-row {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                margin-top: 8px;
+            }
+            .octave-label {
+                font-size: 11px;
+                opacity: 0.7;
+                margin-right: 2px;
+            }
+            .octave-btn.active {
+                background: #f1c40f;
+                color: #2f3542;
+                border-color: #f1c40f;
+            }
             .pattern-steps {
                 display: flex;
                 flex-wrap: wrap;

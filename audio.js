@@ -361,8 +361,20 @@ const NOTE_FREQUENCIES = {
     note_si: 493.883 // B4
 };
 
-function nextNoteFrequency(type) {
+// La nota può avere l'ottava codificata nel tipo (es. "note_do_3", "note_do_5"):
+// "note_do" senza suffisso = ottava centrale (4), come da NOTE_FREQUENCIES.
+function noteFrequencyForType(type) {
     if (NOTE_FREQUENCIES[type] !== undefined) return NOTE_FREQUENCIES[type];
+    const m = /^(note_[a-z]+)_(\d+)$/.exec(type);
+    if (m && NOTE_FREQUENCIES[m[1]] !== undefined) {
+        return NOTE_FREQUENCIES[m[1]] * Math.pow(2, parseInt(m[2], 10) - 4);
+    }
+    return null;
+}
+
+function nextNoteFrequency(type) {
+    const fixed = noteFrequencyForType(type);
+    if (fixed !== null) return fixed;
 
     const reg = materialRegisters[type] || materialRegisters.wall;
     let degree = melodicDegree[type] !== undefined ? melodicDegree[type] : reg.centerDegree;
@@ -476,12 +488,16 @@ function stealOldestVoiceIfNeeded() {
     }
 }
 
-function playMixedSound(typeA, typeB, velocity) {
+function playMixedSound(typeA, typeB, velocity, decayRatio) {
     if (audioCtx.state === "suspended") audioCtx.resume();
+    // "decayRatio" (0..1) = quanto la coppia è invecchiata rispetto alla propria
+    // vita utile: a 0 l'oggetto è "fresco", a 1 sta per esaurirsi. Più l'oggetto
+    // decade, più il suono diventa spento (filtro chiuso, volume attenuato).
+    const decay = Math.max(0, Math.min(1, decayRatio || 0));
     // Sfere-strumento (kick, snare, hi-hat...): suonano la batteria sintetizzata
     // usando l'intensità d'impatto, senza passare dagli oscillator melodici.
-    if (isInstrumentType(typeA)) return playCollisionInstrument(typeA, velocity);
-    if (isInstrumentType(typeB)) return playCollisionInstrument(typeB, velocity);
+    if (isInstrumentType(typeA)) return playCollisionInstrument(typeA, velocity * (1 - 0.35 * decay));
+    if (isInstrumentType(typeB)) return playCollisionInstrument(typeB, velocity * (1 - 0.35 * decay));
     activeSoundsCount++;
     stealOldestVoiceIfNeeded();
 
@@ -504,7 +520,10 @@ function playMixedSound(typeA, typeB, velocity) {
     oscSub.frequency.setValueAtTime(freq1 * 0.5, now);
 
     filter1.type = timbre.filterType || "lowpass";
-    filter1.frequency.setValueAtTime(Math.min(freq1 * timbre.cutoffMult, 5000), now);
+    filter1.frequency.setValueAtTime(
+        Math.min(freq1 * timbre.cutoffMult, 5000) * Math.pow(1 - 0.85 * decay, 1.2),
+        now
+    );
     filter1.Q.setValueAtTime(timbre.resonance, now);
 
     const baseVol1 = volumes[primaryType] !== undefined ? volumes[primaryType] : 0.8;
@@ -518,7 +537,7 @@ function playMixedSound(typeA, typeB, velocity) {
     const IMPACT_REF = 8; // intensità oltre la quale il volume è già vicino al massimo
     const normalizedImpact = Math.min(1, velocity / IMPACT_REF);
     const curvedImpact = Math.pow(normalizedImpact, 0.6);
-    const vol1 = (IMPACT_MIN_VOL + (IMPACT_MAX_VOL - IMPACT_MIN_VOL) * curvedImpact) * baseVol1 * masterVolume;
+    const vol1 = (IMPACT_MIN_VOL + (IMPACT_MAX_VOL - IMPACT_MIN_VOL) * curvedImpact) * baseVol1 * masterVolume * (1 - 0.4 * decay);
 
     const duration = getTimbreDuration();
 

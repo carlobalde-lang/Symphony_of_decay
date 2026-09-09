@@ -427,6 +427,7 @@ restoreLastSessionIfAny();
 
 buildWallPiano();
 initWallPanelDrag();
+setSpawnNoteOctave(4);
 
 const timbreSelectEl = document.getElementById("timbre-select");
 if (timbreSelectEl) {
