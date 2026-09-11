@@ -1209,3 +1209,47 @@
                     border-radius: 5px;
                 }
             }
+            /* --- Emitter panel su telefoni in portrait: massimo compatto --- */
+            @media (max-width: 520px) and (orientation: portrait) {
+                #emitter-panel {
+                    width: min(84vw, 300px);
+                    max-height: min(46vh, 440px);
+                    padding: 8px;
+                    gap: 4px;
+                    border-radius: 10px;
+                }
+                #emitter-panel .emitter-panel-header {
+                    font-size: 11px;
+                    margin-bottom: 2px;
+                    padding: 2px 1px;
+                }
+                #emitter-panel .tool-group {
+                    gap: 2px;
+                    margin-bottom: 4px;
+                }
+                #emitter-panel label,
+                #emitter-panel .slider-val,
+                #emitter-panel .pattern-hint {
+                    font-size: 11px;
+                }
+                #emitter-panel select,
+                #emitter-panel .scene-select,
+                #emitter-panel input[type="range"] {
+                    font-size: 11px;
+                }
+                #emitter-panel .sub-btn {
+                    padding: 3px 6px;
+                    font-size: 10px;
+                    border-radius: 6px;
+                }
+                #emitter-panel .drum-timeline {
+                    gap: 2px;
+                }
+                #emitter-panel .drum-step {
+                    min-height: 16px;
+                    border-radius: 4px;
+                }
+                #emitter-panel .step-label {
+                    font-size: 8px;
+                }
+            }
