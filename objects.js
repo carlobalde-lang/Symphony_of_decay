@@ -16,6 +16,11 @@ let currentMode = "spawn";
 let linkStartBody = null;
 let linkStartPoint = null;
 let isPaused = false;
+let _pausedAtMs = null;
+let _pausedTotalMs = 0;
+function gameNowMs() {
+    return (_pausedAtMs === null ? Date.now() : _pausedAtMs) - _pausedTotalMs;
+}
 let ropeIdCounter = 0;
 let editingWallBody = null;
 let resizingWallHandle = null;
@@ -35,6 +40,8 @@ let _lastPointerWorld = null;        // ultima posizione puntatore in coordinate
 function toggleToolbox(event) {
     if (event) event.stopPropagation();
     document.getElementById("toolbox").classList.toggle("collapsed");
+    if (typeof syncStudioControls === "function") syncStudioControls();
+    if (document.getElementById("toolbox").classList.contains("collapsed")) document.getElementById("toolbox-toggle").focus();
 }
 
 const THEME_NAMES = ["dark", "light", "cyberpunk", "synthwave", "matrix", "sunset", "forest", "candy"];
@@ -138,7 +145,14 @@ function setTheme(name) {
 }
 
 function togglePause() {
+    if (isPaused) {
+        _pausedTotalMs += Date.now() - _pausedAtMs;
+        _pausedAtMs = null;
+    } else {
+        _pausedAtMs = Date.now();
+    }
     isPaused = !isPaused;
+    resetPhysicsTiming();
     const btn = document.getElementById("btn-pause-play");
     if (isPaused) {
         btn.innerText = t("btn-play");
@@ -151,6 +165,7 @@ function togglePause() {
 function updateCursor() {
     const cursors = {
         none: "grab",
+        pan: "grab",
         spawn: "copy",
         bar: "crosshair",
         rope: "crosshair",
@@ -327,7 +342,7 @@ function spawnElement(x, y, typeKey, useSpawnOctave) {
             body.emitterPower = 12;
             body.emitterBPM = 90;
             body.emitterLifetime = 8; // secondi; 0 = infinito
-            body.emitterNextFireMs = Date.now() + 60000 / body.emitterBPM;
+            body.emitterNextFireMs = gameNowMs() + 60000 / body.emitterBPM;
             body.emitterPaused = false;
             body.emitterSyncEnabled = false;
             body.emitterSyncDivision = 1;
@@ -416,7 +431,6 @@ function deselectAllActive() {
     linkStartBody = null;
     linkStartPoint = null;
     if (currentEmitterPanelBody) {
-        currentEmitterPanelBody = null;
         closeEmitterPanel();
     }
     if (editingWallBody) {
@@ -548,7 +562,7 @@ function serializeBodyForClipboard(b) {
         emitterHalfW: b.emitterHalfW || null,
         emitterHalfH: b.emitterHalfH || null,
         emitterObjectType: b.emitterObjectType || null,
-        emitterPower: b.emitterPower || null,
+        emitterPower: b.emitterPower ?? null,
         emitterBPM: b.emitterBPM || null,
         emitterLifetime: b.emitterLifetime !== undefined ? b.emitterLifetime : null,
         emitterPaused: b.emitterPaused || false,
@@ -564,6 +578,9 @@ function serializeBodyForClipboard(b) {
         emitterChainEnabled: b.emitterChainEnabled || false,
         emitterChainPlayingBank: b.emitterChainPlayingBank || 0,
         remainingLifespanMs: null,
+        baseColor: b.baseColor || null,
+        isAnchor: !!b.isAnchor,
+        angularDamping: b.getAngularDamping(),
         linearDamping: b.getLinearDamping(),
         fixtures
     };
@@ -580,6 +597,7 @@ function serializeJointForClipboard(j, bodyIndex) {
         isRopeDistanceJoint: !!j.isRopeDistanceJoint,
         isCustomRender: !!j.isCustomRender,
         renderColor: j.renderColor || null,
+        baseColor: j.baseColor || null,
         renderWidth: j.renderWidth || null
     };
     if (j.getType() === "distance-joint") {
@@ -818,7 +836,7 @@ world.on("begin-contact", (contact) => {
     if (bodyA.soundType && bodyB.soundType) {
         // Proiettile appena spawnato: il contatto "alla bocca" (overlap con parete/oggetto)
         // non deve suonare come un impatto reale. Dopo 50ms il corpo si è mosso davvero.
-        const nowMs = Date.now();
+        const nowMs = gameNowMs();
         const graceMs = 50;
         const recentSpawn = (body) => body.spawnedAtMs !== undefined && nowMs - body.spawnedAtMs < graceMs;
         if (recentSpawn(bodyA) || recentSpawn(bodyB)) return;
@@ -862,7 +880,7 @@ world.on("begin-contact", (contact) => {
             // (filtro chiuso e volume attenuato). Nel tema della "Sinfonia della Decadenza".
             const bodyDecay = (bd) => {
                 if (!bd || !bd.lifespanMs || bd.spawnedAtMs === undefined) return 0;
-                const ratio = (Date.now() - bd.spawnedAtMs) / bd.lifespanMs;
+                const ratio = (gameNowMs() - bd.spawnedAtMs) / bd.lifespanMs;
                 return ratio > 1 ? 1 : ratio < 0 ? 0 : ratio;
             };
             const decayRatio = Math.max(bodyDecay(bodyA), bodyDecay(bodyB));
@@ -887,6 +905,7 @@ world.on("begin-contact", (contact) => {
 function clearSceneAction() {
     saveUndoState();
     clearScene();
+    if (typeof fitStudioCamera === "function") fitStudioCamera();
     updateInstructionText();
 }
 
@@ -914,18 +933,16 @@ function triggerDecay() {
     osc.stop(audioCtx.currentTime + 1.8);
 }
 
-function clearScene() {
+function clearScene(preservedBodies = new Set()) {
     // 1) I muri perimetrali vengono rimessi alla dimensione della finestra
     resetBoundaryToWindow();
     // 2) Raccogli
     const toDestroy = [];
     for (let b = world.getBodyList(); b; b = b.getNext()) {
-        if (!b.isWall) toDestroy.push(b);
+        if (!b.isWall && b !== mouseBody && !preservedBodies.has(b)) toDestroy.push(b);
     }
-    // 2) Distruggi i joint collegati (prima, perché destroyBody li cancella comunque)
-    for (let j = world.getJointList(); j; j = j.getNext()) {
-        if (j.getBodyA() && toDestroy.includes(j.getBodyA())) toDestroy.push(j); // non serve, destroyBody si occupa dei joint
-    }
+    // destroyBody rimuove automaticamente i giunti collegati.
+    cancelPointerInteraction();
     // 3) Distruggi i body (questo rimuove automaticamente i joint associati)
     toDestroy.forEach((b) => {
         if (b !== world) world.destroyBody(b);
@@ -967,7 +984,7 @@ function flashMessage(text, color) {
 // comune (fase fissa dall'origine), invece che al proprio BPM libero: così più
 // emettitori sincronizzati restano in fase tra loro come tracce di una canzone.
 let globalClockBpm = 120;
-let globalClockOriginMs = Date.now();
+let globalClockOriginMs = gameNowMs();
 
 const SYNC_DIVISIONS = [
     { value: 0.25, label: "1/16" },
@@ -986,7 +1003,7 @@ function setGlobalClockBpm(value) {
 }
 
 function resetGlobalClock() {
-    globalClockOriginMs = Date.now();
+    globalClockOriginMs = gameNowMs();
     realignAllSyncedEmitters();
     flashMessage("🎼 " + t("global-clock-reset"), "#2ed573");
 }
@@ -1004,7 +1021,7 @@ function getEmitterActivePattern(b) {
 function alignEmitterToGrid(b) {
     const beatLenMs = 60000 / globalClockBpm;
     const gridMs = Math.max(EMITTER_MIN_INTERVAL_MS, b.emitterSyncDivision * beatLenMs);
-    const elapsed = Date.now() - globalClockOriginMs;
+    const elapsed = gameNowMs() - globalClockOriginMs;
     const nextIndex = Math.floor(elapsed / gridMs) + 1;
     b.emitterNextFireMs = globalClockOriginMs + nextIndex * gridMs;
     // Allinea anche il playhead del sequencer alla cella del prossimo tick:
@@ -1023,7 +1040,7 @@ function realignAllSyncedEmitters() {
 }
 
 function updateEmitters() {
-    const now = Date.now();
+    const now = gameNowMs();
     for (let b = world.getBodyList(); b; b = b.getNext()) {
         if (!b.isEmitter) continue;
         if (b.emitterPaused) continue;
@@ -1135,13 +1152,13 @@ function updateEmitters() {
         projectile.spawnX = spawnPoint.x;
         projectile.spawnY = spawnPoint.y;
         projectile.spawnRadius = ((cfg.radius || cfg.size || cfg.h / 2 || 20) * SPAWN_SCALE) / SCALE;
-        projectile.spawnedAtMs = Date.now();
-        const power = (b.emitterPower || 12) * (VELOCITY_LEVELS[spawnVel] || 1);
+        projectile.spawnedAtMs = gameNowMs();
+        const power = (b.emitterPower ?? 12) * (VELOCITY_LEVELS[spawnVel] || 1);
         projectile.setLinearVelocity(planck.Vec2(forward.x * power, forward.y * power));
 
         if (b.emitterLifetime > 0) {
             projectile.lifespanMs = b.emitterLifetime * 1000;
-            projectile.spawnedAtMs = Date.now();
+            projectile.spawnedAtMs = gameNowMs();
         }
 
         spawnImpactParticles(spawnPoint.x, spawnPoint.y, "#f1c40f", power * 0.4);
@@ -1158,7 +1175,7 @@ function updateEmitters() {
 // --- Ciclo di vita degli oggetti con durata limitata (sparati dagli emettitori) ---
 
 function updateLifespans() {
-    const now = Date.now();
+    const now = gameNowMs();
     let b = world.getBodyList();
     while (b) {
         const nextB = b.getNext();
@@ -1253,6 +1270,7 @@ function setEmitterActiveBank(idx) {
     const banks = ensurePatternBanks(currentEmitterPanelBody);
     const clamped = Math.max(0, Math.min(idx, banks.length - 1));
     if (clamped === currentEmitterPanelBody.emitterActiveBank) return;
+    saveUndoState();
     banks[currentEmitterPanelBody.emitterActiveBank] = (currentEmitterPanelBody.emitterPattern || []).map((s) => s ? (typeof s === "string" ? s : { ...s }) : null);
     currentEmitterPanelBody.emitterActiveBank = clamped;
     currentEmitterPanelBody.emitterPattern = (banks[clamped] || new Array(DEFAULT_PATTERN_LENGTH).fill(null)).map(normalizeStep);
@@ -1266,6 +1284,7 @@ function addPatternBank() {
     if (!currentEmitterPanelBody) return;
     const banks = ensurePatternBanks(currentEmitterPanelBody);
     if (banks.length >= MAX_PATTERN_BANKS) return;
+    saveUndoState();
     saveActiveBank(currentEmitterPanelBody);
     const newBank = new Array((currentEmitterPanelBody.emitterPattern && currentEmitterPanelBody.emitterPattern.length) || DEFAULT_PATTERN_LENGTH).fill(null);
     banks.push(newBank);
@@ -1280,6 +1299,7 @@ function removePatternBank() {
     if (!currentEmitterPanelBody) return;
     const banks = ensurePatternBanks(currentEmitterPanelBody);
     if (banks.length <= 1) return;
+    saveUndoState();
     banks.splice(currentEmitterPanelBody.emitterActiveBank, 1);
     currentEmitterPanelBody.emitterActiveBank = Math.max(0, currentEmitterPanelBody.emitterActiveBank - 1);
     currentEmitterPanelBody.emitterPattern = (banks[currentEmitterPanelBody.emitterActiveBank] || new Array(DEFAULT_PATTERN_LENGTH).fill(null)).map(normalizeStep);
@@ -1291,6 +1311,7 @@ function removePatternBank() {
 
 function toggleEmitterChain(enabled) {
     if (!currentEmitterPanelBody) return;
+    saveUndoState();
     currentEmitterPanelBody.emitterChainEnabled = !!enabled;
     renderEmitterBankBar();
 }
@@ -1378,6 +1399,7 @@ function renderEmitterPattern() {
         });
         container.addEventListener("contextmenu", (e) => {
             e.preventDefault();
+            e.stopPropagation();
             const cell = e.target.closest(".drum-step");
             if (cell && cell.dataset.index !== undefined) {
                 clearPatternStep(parseInt(cell.dataset.index, 10));
@@ -1391,6 +1413,7 @@ function renderEmitterPattern() {
             }
         });
         container.addEventListener("mousedown", (e) => {
+            _patternDragUndoSaved = false;
             _dragStartX = e.clientX;
             _dragStartY = e.clientY;
             const cell = e.target.closest(".drum-step");
@@ -1477,6 +1500,14 @@ function updatePlayheadHighlight() {
     });
 }
 
+let _patternDragUndoSaved = false;
+function savePatternEditUndo(skipRender) {
+    if (!skipRender || !_patternDragUndoSaved) {
+        saveUndoState();
+        if (skipRender) _patternDragUndoSaved = true;
+    }
+}
+
 function paintPatternStep(index, skipRender, force) {
     if (!currentEmitterPanelBody) return;
     const sel = document.getElementById("emitter-pattern-add-select");
@@ -1491,6 +1522,7 @@ function paintPatternStep(index, skipRender, force) {
         if (!skipRender) renderEmitterPattern();
         return;
     }
+    savePatternEditUndo(skipRender);
     if (current && currentType === selectedType) {
         const curVel = stepVelocity(current);
         if (curVel < 2) {
@@ -1508,6 +1540,8 @@ function clearPatternStep(index, skipRender) {
     if (!currentEmitterPanelBody) return;
     const pattern = ensurePatternArray(currentEmitterPanelBody);
     if (index < 0 || index >= pattern.length) return;
+    if (!pattern[index]) return;
+    savePatternEditUndo(skipRender);
     pattern[index] = null;
     if (!skipRender) renderEmitterPattern();
 }
@@ -1516,6 +1550,8 @@ function setPatternLength(newLen) {
     if (!currentEmitterPanelBody) return;
     newLen = Math.max(1, Math.min(32, parseInt(newLen, 10) || DEFAULT_PATTERN_LENGTH));
     const old = currentEmitterPanelBody.emitterPattern || [];
+    if (old.length === newLen) return;
+    saveUndoState();
     const next = new Array(newLen).fill(null);
     for (let i = 0; i < Math.min(old.length, newLen); i++) next[i] = old[i];
     currentEmitterPanelBody.emitterPattern = next;
@@ -1529,6 +1565,7 @@ function shiftPattern(dir) {
     if (!currentEmitterPanelBody) return;
     const pattern = ensurePatternArray(currentEmitterPanelBody);
     if (pattern.length === 0) return;
+    saveUndoState();
     if (dir > 0) {
         const last = pattern.pop();
         pattern.unshift(last);
@@ -1541,6 +1578,7 @@ function shiftPattern(dir) {
 
 function clearEmitterPattern() {
     if (!currentEmitterPanelBody) return;
+    saveUndoState();
     const len = (currentEmitterPanelBody.emitterPattern && currentEmitterPanelBody.emitterPattern.length) || DEFAULT_PATTERN_LENGTH;
     currentEmitterPanelBody.emitterPattern = new Array(len).fill(null);
     currentEmitterPanelBody.emitterPatternIndex = 0;
@@ -1591,6 +1629,7 @@ function copyEmitterPattern() {
 
 function pasteEmitterPattern() {
     if (!currentEmitterPanelBody || !_patternClipboard) return;
+    saveUndoState();
     const newLen = _patternClipboard.length;
     currentEmitterPanelBody.emitterPattern = _patternClipboard.map((s) => s ? { ...s } : null);
     if (currentEmitterPanelBody.emitterPatternIndex >= newLen) {
@@ -1695,7 +1734,19 @@ const PATTERN_PRESETS = {
     },
     "arpeggio-16": () => {
         const notes = ["note_do", "note_mi", "note_sol", "note_si"];
-        return new Array(16).fill(null).map((_, i) => ({ t: notes[i % notes.length], v: (i % 4) + 1 }));
+        return new Array(16).fill(null).map((_, i) => ({ t: notes[i % notes.length], v: i % 3 }));
+    },
+    "ambient-16": () => {
+        const p = new Array(16).fill(null);
+        [0, 4, 8, 12].forEach((i, n) => p[i] = { t: ["note_do", "note_mi", "note_sol", "note_si"][n], v: 0 });
+        return p;
+    },
+    "syncopated-16": () => {
+        const p = new Array(16).fill(null);
+        [0, 6, 10].forEach(i => p[i] = { t: "inst_kick", v: 2 });
+        [4, 12].forEach(i => p[i] = { t: "inst_snare", v: 1 });
+        [2, 7, 9, 14].forEach(i => p[i] = { t: "inst_hihat_c", v: 0 });
+        return p;
     },
     "random-16": () => {
         const types = getEmitterSpawnableTypes();
@@ -1705,12 +1756,14 @@ const PATTERN_PRESETS = {
 
 function applyPatternPreset(key) {
     if (!currentEmitterPanelBody || !PATTERN_PRESETS[key]) return;
+    saveUndoState();
     currentEmitterPanelBody.emitterPattern = PATTERN_PRESETS[key]();
     currentEmitterPanelBody.emitterPatternIndex = 0;
     renderEmitterPattern();
 }
 
 function closeDragPaint() {
+    _patternDragUndoSaved = false;
     if (_isDragPainting) {
         _isDragPainting = false;
         _justDragged = true;

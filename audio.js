@@ -37,14 +37,14 @@ function _generateImpulseResponse(durationSec, decay) {
     return impulse;
 }
 
-const reverbConvolver = audioCtx.createConvolver();
+let reverbConvolver = audioCtx.createConvolver();
 reverbConvolver.buffer = _generateImpulseResponse(2.2, 2.5);
 const reverbWetGain = audioCtx.createGain();
 reverbWetGain.gain.value = 0.0; // impostato da updateEffects()
 reverbConvolver.connect(reverbWetGain);
 reverbWetGain.connect(masterBus);
 
-const delayNode = audioCtx.createDelay(2.0);
+let delayNode = audioCtx.createDelay(2.0);
 delayNode.delayTime.value = 0.28;
 const delayFeedback = audioCtx.createGain();
 delayFeedback.gain.value = 0.35;
@@ -210,11 +210,11 @@ function sanitizeTimbreDef(t) {
 
 function getStoredCustomTimbres() {
     const arr = storageGetJson(CUSTOM_TIMBRES_KEY, []);
-    return Array.isArray(arr) ? arr : [];
+    return Array.isArray(arr) ? arr.filter((item) => item && typeof item.key === "string" && /^custom_[a-zA-Z0-9_]+$/.test(item.key) && typeof item.name === "string") : [];
 }
 
 function saveStoredCustomTimbres(arr) {
-    storageSet(CUSTOM_TIMBRES_KEY, arr);
+    return storageSet(CUSTOM_TIMBRES_KEY, arr);
 }
 
 function isCustomTimbreKey(key) {
@@ -234,18 +234,21 @@ function saveCustomTimbre(name, def) {
     if (!trimmed) return null;
     const key = "custom_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 6);
     const stored = sanitizeTimbreDef({ ...def, key, name: trimmed });
-    SOUND_TIMBRES[key] = stored;
     const arr = getStoredCustomTimbres();
     arr.push(stored);
-    saveStoredCustomTimbres(arr);
+    if (!saveStoredCustomTimbres(arr)) return null;
+    SOUND_TIMBRES[key] = stored;
     return key;
 }
 
 function deleteCustomTimbre(key) {
     if (!isCustomTimbreKey(key)) return;
-    if (SOUND_TIMBRES[key]) delete SOUND_TIMBRES[key];
     const arr = getStoredCustomTimbres().filter((t) => t.key !== key);
-    saveStoredCustomTimbres(arr);
+    if (!saveStoredCustomTimbres(arr)) {
+        flashMessage(t("timbre-storage-failed"), "#ff4757");
+        return;
+    }
+    if (SOUND_TIMBRES[key]) delete SOUND_TIMBRES[key];
     if (currentTimbreMode === key) {
         currentTimbreMode = "sine";
         const sel = document.getElementById("timbre-select");
@@ -453,33 +456,35 @@ function resetMixer() {
 
 let activeSoundsCount = 0;
 
-// --- Voice stealing ---
-// Non c'è un limite a QUANTI suoni possono partire, ma per non sovraccaricare
-// il motore audio (troppi oscillatori assieme = glitch e silenzio) si tiene un
-// tetto sul numero di voci REALMENTE in corso. Quando si supera, la voce più
-// vecchia viene interrotta con una dissolvenza rapida (non un taglio secco)
-// per fare spazio a quella nuova, che parte sempre regolarmente.
+// Include le voci in dissolvenza nel limite: una raffica non deve creare
+// centinaia di sorgenti prima che il motore audio elabori gli eventi ended.
 const MAX_ACTIVE_VOICES = 40;
 const STEAL_FADE_SEC = 0.02;
 let activeVoices = [];
+let audioLastDroppedAt = -Infinity;
 
 function stealOldestVoiceIfNeeded() {
-    while (activeVoices.length >= MAX_ACTIVE_VOICES) {
-        const voice = activeVoices.shift();
-        const stealNow = audioCtx.currentTime;
-        try {
-            voice.gains.forEach((g) => {
-                g.gain.cancelScheduledValues(stealNow);
-                g.gain.setValueAtTime(g.gain.value, stealNow);
-                g.gain.linearRampToValueAtTime(0.0001, stealNow + STEAL_FADE_SEC);
-            });
-            voice.oscillators.forEach((o) => {
-                try {
-                    o.stop(stealNow + STEAL_FADE_SEC + 0.005);
-                } catch (e) {}
-            });
-        } catch (e) {}
-    }
+    if (activeVoices.length < MAX_ACTIVE_VOICES) return true;
+    audioLastDroppedAt = audioCtx.currentTime;
+    // Una sola coda in dissolvenza alla volta; gli impatti in eccesso vengono
+    // ignorati finché si libera un posto, senza troncare tutte le note insieme.
+    if (activeVoices.some(voice => voice.retiring)) return false;
+    const voice = activeVoices[0];
+    voice.retiring = true;
+    const now = audioCtx.currentTime;
+    voice.gains.forEach(g => {
+        if (typeof g.gain.cancelAndHoldAtTime === "function") {
+            g.gain.cancelAndHoldAtTime(now);
+        } else {
+            g.gain.cancelScheduledValues(now);
+            g.gain.setValueAtTime(g.gain.value, now);
+        }
+        g.gain.linearRampToValueAtTime(0, now + STEAL_FADE_SEC);
+    });
+    voice.oscillators.forEach(o => {
+        try { o.stop(now + STEAL_FADE_SEC + 0.005); } catch (e) {}
+    });
+    return false;
 }
 
 function playMixedSound(typeA, typeB, velocity, decayRatio) {
@@ -492,8 +497,7 @@ function playMixedSound(typeA, typeB, velocity, decayRatio) {
     // usando l'intensità d'impatto, senza passare dagli oscillator melodici.
     if (isInstrumentType(typeA)) return playCollisionInstrument(typeA, velocity * (1 - 0.35 * decay));
     if (isInstrumentType(typeB)) return playCollisionInstrument(typeB, velocity * (1 - 0.35 * decay));
-    activeSoundsCount++;
-    stealOldestVoiceIfNeeded();
+    if (!beginVoice()) return;
 
     const now = getScheduledTime(audioCtx.currentTime);
     const primaryType = typeA;
@@ -503,15 +507,17 @@ function playMixedSound(typeA, typeB, velocity, decayRatio) {
     const freq1 = nextNoteFrequency(primaryType);
 
     const osc1 = audioCtx.createOscillator();
-    const oscSub = audioCtx.createOscillator();
+    const oscSub = timbre.sub ? audioCtx.createOscillator() : null;
     const gain1 = audioCtx.createGain();
     const filter1 = audioCtx.createBiquadFilter();
 
     osc1.type = timbre.type1;
     osc1.frequency.setValueAtTime(freq1, now);
 
-    oscSub.type = "sine";
-    oscSub.frequency.setValueAtTime(freq1 * 0.5, now);
+    if (oscSub) {
+        oscSub.type = "sine";
+        oscSub.frequency.setValueAtTime(freq1 * 0.5, now);
+    }
 
     filter1.type = timbre.filterType || "lowpass";
     filter1.frequency.setValueAtTime(
@@ -556,13 +562,6 @@ function playMixedSound(typeA, typeB, velocity, decayRatio) {
         oscillators: timbre.sub ? [osc1, oscSub] : [osc1],
         gains: [gain1]
     };
-    activeVoices.push(voiceEntry);
-
-    osc1.onended = () => {
-        activeSoundsCount = Math.max(0, activeSoundsCount - 1);
-        const idx = activeVoices.indexOf(voiceEntry);
-        if (idx !== -1) activeVoices.splice(idx, 1);
-    };
 
     if (secondaryType) {
         const freq2 = nextNoteFrequency(secondaryType);
@@ -594,6 +593,7 @@ function playMixedSound(typeA, typeB, velocity, decayRatio) {
         if (primaryType !== secondaryType) addHarmonyScore(freq1, freq2, vol1);
     }
 
+    registerVoice(voiceEntry.oscillators, voiceEntry.gains);
     addScore(vol1);
 }
 
@@ -619,24 +619,32 @@ function getNoiseBuffer(durationSec) {
 }
 
 function registerVoice(oscillators, gains) {
-    const entry = { oscillators, gains };
+    const entry = { oscillators, gains, remaining: oscillators.length, finished: false };
     activeVoices.push(entry);
+    activeSoundsCount++;
+    oscillators.forEach(source => source.addEventListener("ended", () => {
+        source.disconnect();
+        entry.remaining--;
+        if (entry.remaining === 0) forgetVoice(entry);
+    }, { once: true }));
     return entry;
 }
 function forgetVoice(entry) {
+    if (entry.finished) return;
+    entry.finished = true;
+    entry.gains.forEach(gain => gain.disconnect());
     const idx = activeVoices.indexOf(entry);
     if (idx !== -1) activeVoices.splice(idx, 1);
     activeSoundsCount = Math.max(0, activeSoundsCount - 1);
 }
 function beginVoice() {
-    activeSoundsCount++;
-    stealOldestVoiceIfNeeded();
+    return stealOldestVoiceIfNeeded();
 }
 
 function playKick(v) {
     const now = getScheduledTime(audioCtx.currentTime);
     const tb = getCurrentTimbre();
-    beginVoice();
+    if (!beginVoice()) return;
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.type = tb.type1;
@@ -648,14 +656,13 @@ function playKick(v) {
     connectToEffectsBus(gain);
     osc.start(now);
     osc.stop(now + 0.55);
-    const entry = registerVoice([osc], [gain]);
-    osc.onended = () => forgetVoice(entry);
+    registerVoice([osc], [gain]);
 }
 
 function playSnare(v) {
     const now = getScheduledTime(audioCtx.currentTime);
     const tb = getCurrentTimbre();
-    beginVoice();
+    if (!beginVoice()) return;
     const body = audioCtx.createOscillator();
     const bg = audioCtx.createGain();
     body.type = tb.type1;
@@ -682,14 +689,13 @@ function playSnare(v) {
     connectToEffectsBus(ng);
     src.start(now);
     src.stop(now + 0.25);
-    const entry = registerVoice([body, src], [bg, ng]);
-    body.onended = () => forgetVoice(entry);
+    registerVoice([body, src], [bg, ng]);
 }
 
 function playHiHat(open, v) {
     const now = getScheduledTime(audioCtx.currentTime);
     const tb = getCurrentTimbre();
-    beginVoice();
+    if (!beginVoice()) return;
     const src = audioCtx.createBufferSource();
     src.buffer = getNoiseBuffer(open ? 0.5 : 0.1);
     const hp = audioCtx.createBiquadFilter();
@@ -714,14 +720,13 @@ function playHiHat(open, v) {
     src.stop(now + (open ? 0.45 : 0.1));
     ping.start(now);
     ping.stop(now + (open ? 0.2 : 0.07));
-    const entry = registerVoice([src, ping], [gain, pg]);
-    src.onended = () => forgetVoice(entry);
+    registerVoice([src, ping], [gain, pg]);
 }
 
 function playClap(v) {
     const now = getScheduledTime(audioCtx.currentTime);
     const tb = getCurrentTimbre();
-    beginVoice();
+    if (!beginVoice()) return;
     const src = audioCtx.createBufferSource();
     src.buffer = getNoiseBuffer(0.3);
     const bp = audioCtx.createBiquadFilter();
@@ -755,14 +760,13 @@ function playClap(v) {
     src.stop(now + 0.32);
     ping.start(now);
     ping.stop(now + 0.08);
-    const entry = registerVoice([src, ping], [gain, pg]);
-    src.onended = () => forgetVoice(entry);
+    registerVoice([src, ping], [gain, pg]);
 }
 
 function playConga(v, high) {
     const now = getScheduledTime(audioCtx.currentTime);
     const tb = getCurrentTimbre();
-    beginVoice();
+    if (!beginVoice()) return;
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.type = tb.type1;
@@ -777,14 +781,13 @@ function playConga(v, high) {
     connectToEffectsBus(gain);
     osc.start(now);
     osc.stop(now + dur + 0.05);
-    const entry = registerVoice([osc], [gain]);
-    osc.onended = () => forgetVoice(entry);
+    registerVoice([osc], [gain]);
 }
 
 function playClave(v) {
     const now = getScheduledTime(audioCtx.currentTime);
     const tb = getCurrentTimbre();
-    beginVoice();
+    if (!beginVoice()) return;
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.type = tb.type2;
@@ -795,14 +798,13 @@ function playClave(v) {
     connectToEffectsBus(gain);
     osc.start(now);
     osc.stop(now + 0.06);
-    const entry = registerVoice([osc], [gain]);
-    osc.onended = () => forgetVoice(entry);
+    registerVoice([osc], [gain]);
 }
 
 function playHarpsichordNote(freq, v) {
     const now = getScheduledTime(audioCtx.currentTime);
     const tb = getCurrentTimbre();
-    beginVoice();
+    if (!beginVoice()) return;
     const gain = audioCtx.createGain();
     const harmonics = [1, 2, 3, 4, 5, 6, 8];
     const amps = [1, 0.55, 0.42, 0.3, 0.2, 0.13, 0.07];
@@ -835,8 +837,7 @@ function playHarpsichordNote(freq, v) {
     oscs.forEach((o) => o.stop(now + dur + 0.1));
     click.start(now);
     click.stop(now + 0.03);
-    const entry = registerVoice(oscs.concat(click), [gain]);
-    oscs[0].onended = () => forgetVoice(entry);
+    registerVoice(oscs.concat(click), [gain]);
 }
 
 const INST_TYPES = ["inst_kick", "inst_snare", "inst_hihat_c", "inst_hihat_o", "inst_clap", "inst_conga", "inst_bongo", "inst_clave"];
@@ -950,7 +951,12 @@ function _downloadBlob(blob, ext) {
 
 function _setRecordButton(labelKey) {
     const btn = document.getElementById("btn-record");
-    if (btn) btn.textContent = t(labelKey);
+    if (btn) {
+        btn.textContent = t(labelKey);
+        btn.title = btn.textContent;
+        btn.setAttribute('aria-label', btn.textContent);
+        btn.dataset.recording = String(_recording);
+    }
 }
 
 function _encodeWav(left, right, sampleRate) {
@@ -1244,3 +1250,31 @@ function _drawVisualizer() {
 _drawVisualizer();
 loadCustomTimbres();
 
+
+// Interrompe la scena e ricrea i nodi che conservano le code degli effetti.
+function stopAllSounds() {
+    if (!isPaused) togglePause();
+    const now = audioCtx.currentTime;
+    activeVoices.forEach(voice => {
+        voice.gains.forEach(g => {
+            if (typeof g.gain.cancelAndHoldAtTime === "function") g.gain.cancelAndHoldAtTime(now);
+            else { g.gain.cancelScheduledValues(now); g.gain.setValueAtTime(g.gain.value, now); }
+            g.gain.linearRampToValueAtTime(0, now + STEAL_FADE_SEC);
+        });
+        voice.oscillators.forEach(o => { try { o.stop(now + STEAL_FADE_SEC + 0.005); } catch (e) {} });
+    });
+    const impulse = reverbConvolver.buffer;
+    reverbConvolver.disconnect();
+    delayNode.disconnect();
+    delayFeedback.disconnect();
+    reverbConvolver = audioCtx.createConvolver();
+    reverbConvolver.buffer = impulse;
+    reverbConvolver.connect(reverbWetGain);
+    const delayTime = delayNode.delayTime.value;
+    delayNode = audioCtx.createDelay(2);
+    delayNode.delayTime.value = delayTime;
+    delayNode.connect(delayFeedback);
+    delayFeedback.connect(delayNode);
+    delayNode.connect(delayWetGain);
+    audioLastDroppedAt = -Infinity;
+}

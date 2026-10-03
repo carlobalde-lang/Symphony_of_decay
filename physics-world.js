@@ -378,7 +378,7 @@ function updatePerformanceAdaptiveLimit(nowMs) {
 function getSpawnedBodyCount() {
     let count = 0;
     for (let b = world.getBodyList(); b; b = b.getNext()) {
-        if (!b.isWall) count++;
+        if (!b.isWall && b !== mouseBody) count++;
     }
     return count;
 }
@@ -389,6 +389,7 @@ function updateBodyCountDisplay() {
     if (!el || !box) return;
     const count = getSpawnedBodyCount();
     el.innerText = count;
+    if (typeof updateStudioSceneState === "function") updateStudioSceneState(count);
     box.classList.toggle("limit-full", count >= MAX_BODIES);
     box.classList.toggle("limit-near", count < MAX_BODIES && count >= MAX_BODIES * 0.85);
 }
@@ -476,6 +477,11 @@ function resetPhysics() {
 let mouseJoint = null;
 let mouseBody = world.createBody();
 
+// Il browser avvia lo scorrimento automatico sul mousedown centrale.
+canvas.addEventListener("mousedown", (event) => {
+    if (event.button === 1) event.preventDefault();
+});
+
 canvas.addEventListener("pointerdown", (event) => {
     if (event.pointerType === "touch") {
         touchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
@@ -489,7 +495,8 @@ canvas.addEventListener("pointerdown", (event) => {
         return;
     }
     // Pan camera con il tasto centrale
-    if (event.button === 1) {
+    if (event.button === 1 || (event.button === 0 && currentMode === "pan")) {
+        event.preventDefault();
         camPanActive = true;
         camPanStartX = event.clientX;
         camPanStartY = event.clientY;
@@ -499,13 +506,7 @@ canvas.addEventListener("pointerdown", (event) => {
     const clientX = event.clientX;
     const clientY = event.clientY;
 
-    if (clientX < 280 && clientY < 200) return;
-    if (clientX > window.innerWidth - 300 && clientY < 60) return;
-    const topCenterEl = document.getElementById("top-center-controls");
-    if (topCenterEl) {
-        const r = topCenterEl.getBoundingClientRect();
-        if (clientX >= r.left - 6 && clientX <= r.right + 6 && clientY >= r.top - 6 && clientY <= r.bottom + 6) return;
-    }
+    if (typeof isPointOverStudioUI === "function" && isPointOverStudioUI(clientX, clientY)) return;
 
     const mousePos = planck.Vec2(screenToWorldX(clientX), screenToWorldY(clientY));
     _lastPointerWorld = planck.Vec2(mousePos.x, mousePos.y);
@@ -537,10 +538,6 @@ canvas.addEventListener("pointerdown", (event) => {
             return;
         }
     }
-
-    const toolbox = document.getElementById("toolbox");
-    if (!toolbox.classList.contains("collapsed") && clientX > window.innerWidth - 320 && clientY < window.innerHeight)
-        return;
 
     let clickedBody = null;
     for (let b = world.getBodyList(); b; b = b.getNext()) {
@@ -597,7 +594,7 @@ canvas.addEventListener("pointerdown", (event) => {
         return;
     }
 
-    const now = Date.now();
+    const now = gameNowMs();
     const isDoubleTapOnWall =
         clickedBody &&
         clickedBody.wallHalfW !== undefined &&
@@ -781,11 +778,11 @@ function bodyAtPoint(p) {
     return null;
 }
 
-function createLinkBetween(type, bodyA, localA, bodyB, localB) {
+function createLinkBetween(type, bodyA, localA, bodyB, localB, undoState) {
     const posA = bodyA.getWorldPoint(localA);
     const posB = bodyB.getWorldPoint(localB);
     if (planck.Vec2.distance(posA, posB) < 4 / SCALE) return;
-    saveUndoState();
+    saveUndoState(undoState);
 
     if (type === "bar") {
         const joint = world.createJoint(
@@ -961,10 +958,13 @@ function handleLinkPointerUp(event) {
     // Drag: crea il link tra i due punti; sugli estremi senza corpo vengono messi
     // degli ancoraggi statici invisibili così si può anche "disegnare" nel vuoto.
     const endBody = bodyAtPoint(mousePos);
+    if (start.startBody && start.startBody === endBody) return;
+    if (planck.Vec2.distance(start.startWorld, mousePos) < 4 / SCALE) return;
+    const undoState = serializeScene();
     const startRes = resolveLinkEndpoint(start.startWorld, start.startBody);
     const endRes = resolveLinkEndpoint(mousePos, endBody);
     if (startRes.body === endRes.body) return;
-    createLinkBetween(currentMode, startRes.body, startRes.local, endRes.body, endRes.local);
+    createLinkBetween(currentMode, startRes.body, startRes.local, endRes.body, endRes.local, undoState);
     linkStartBody = null;
     linkStartPoint = null;
 }
@@ -1065,7 +1065,8 @@ function resizeWall(body, side, mouseWorldPos) {
 }
 
 window.addEventListener("contextmenu", (event) => {
-    if (event.target === canvas || event.target === document.body || event.target === canvas.parentElement) event.preventDefault();
+    if (event.target !== canvas && event.target !== document.body && event.target !== canvas.parentElement) return;
+    event.preventDefault();
     deselectAllActive();
 });
 
@@ -1136,12 +1137,29 @@ window.addEventListener("pointerup", (event) => {
     if (linkDragStart) handleLinkPointerUp(event);
 });
 
-window.addEventListener("pointercancel", (event) => {
-    if (event && event.pointerType === "touch") touchPointers.delete(event.pointerId);
-    if (touchPointers.size < 2) pinchState = null;
+function cancelPointerInteraction() {
+    if (mouseJoint) {
+        world.destroyJoint(mouseJoint);
+        mouseJoint = null;
+    }
+    resizingWallHandle = null;
+    isDraggingWall = false;
+    endSelectionDrag();
+    marqueeState = null;
     camPanActive = false;
     boundaryDrag = null;
     linkDragStart = null;
+}
+
+window.addEventListener("pointercancel", (event) => {
+    if (event && event.pointerType === "touch") touchPointers.delete(event.pointerId);
+    if (touchPointers.size < 2) pinchState = null;
+    cancelPointerInteraction();
+});
+window.addEventListener("blur", () => {
+    touchPointers.clear();
+    pinchState = null;
+    cancelPointerInteraction();
 });
 
 canvas.addEventListener(

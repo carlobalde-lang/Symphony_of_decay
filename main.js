@@ -26,7 +26,10 @@ const GRID_CELL = 0.5; // metri
 function setSnapGridEnabled(enabled) {
     snapGridEnabled = enabled;
     const btn = document.getElementById("btn-snap-grid");
-    if (btn) btn.classList.toggle("active", enabled);
+    if (btn) {
+        btn.classList.toggle("active", enabled);
+        btn.setAttribute("aria-pressed", String(enabled));
+    }
     if (!enabled) _gridCacheKey = null;
 }
 
@@ -167,12 +170,32 @@ function drawSelectionOverlay() {
     }
 }
 
-function gameLoop() {
-    updatePerformanceAdaptiveLimit(performance.now());
+let _physicsLastFrameMs = null;
+let _physicsAccumulator = 0;
+function resetPhysicsTiming() {
+    _physicsLastFrameMs = null;
+    _physicsAccumulator = 0;
+}
 
+function advancePhysics(nowMs) {
+    const elapsed = _physicsLastFrameMs === null ? 0 : Math.max(0, (nowMs - _physicsLastFrameMs) / 1000);
+    _physicsLastFrameMs = nowMs;
+    if (isPaused) {
+        _physicsAccumulator = 0;
+        return;
+    }
+    // Limita il recupero dopo frame molto lenti o una scheda in background.
+    _physicsAccumulator = Math.min(_physicsAccumulator + elapsed, timeStep * 6);
+    while (_physicsAccumulator + 1e-10 >= timeStep) {
+        stepPhysics();
+        _physicsAccumulator = Math.max(0, _physicsAccumulator - timeStep);
+    }
+}
+
+function stepPhysics() {
     if (!isPaused) {
         if (windSpeed !== 0 || windTurbulence > 0) {
-            const time = Date.now() * 0.003;
+            const time = gameNowMs() * 0.003;
             for (let b = world.getBodyList(); b; b = b.getNext()) {
                 if (!b.isStatic() && !b.isWall) {
                     const flutter = Math.sin(time + b.getPosition().x * 0.05) * 0.5 + Math.cos(time * 0.7) * 0.5;
@@ -188,7 +211,50 @@ function gameLoop() {
         updateEmitters();
         updateLifespans();
     }
+}
 
+// Le sfumature sono memorizzate per fixture: nessuna ricostruzione per fotogramma.
+const _objectFillCache = new WeakMap();
+const _objectMaterialCache = new Map();
+function getObjectFill(fixture, color) {
+    if (!/^#[0-9a-f]{6}$/i.test(color)) return color;
+    const cached = _objectFillCache.get(fixture);
+    if (cached && cached.color === color) return cached.fill;
+    const shape = fixture.getShape();
+    let radius = shape.m_radius ? shape.m_radius * SCALE : 0;
+    if (fixture.getType() === 'polygon') {
+        radius = Math.max(...shape.m_vertices.map(v => Math.hypot(v.x, v.y))) * SCALE;
+    }
+    if (radius < 3) return color;
+    const tint = amount => '#' + [1, 3, 5].map(i => {
+        const value = parseInt(color.slice(i, i + 2), 16);
+        return Math.round(amount > 0 ? value + (255 - value) * amount : value * (1 + amount)).toString(16).padStart(2, '0');
+    }).join('');
+    const key = color + ':' + radius.toFixed(3);
+    let fill = _objectMaterialCache.get(key);
+    if (!fill) {
+        const texture = document.createElement('canvas');
+        texture.width = texture.height = 128;
+        const paint = texture.getContext('2d');
+        const gradient = paint.createRadialGradient(42, 35, 0, 64, 64, 83);
+        gradient.addColorStop(0, tint(.24));
+        gradient.addColorStop(.52, color);
+        gradient.addColorStop(1, tint(-.32));
+        paint.fillStyle = gradient;
+        paint.fillRect(0, 0, 128, 128);
+        fill = ctx.createPattern(texture, 'no-repeat');
+        if (!fill || typeof fill.setTransform !== 'function') return color;
+        fill.setTransform(new DOMMatrix().translate(-radius, -radius).scale(radius * 2 / 128));
+        _objectMaterialCache.set(key, fill);
+        if (_objectMaterialCache.size > 64) _objectMaterialCache.delete(_objectMaterialCache.keys().next().value);
+    }
+    _objectFillCache.set(fixture, { color, fill });
+    return fill;
+}
+
+function gameLoop(nowMs) {
+    updatePerformanceAdaptiveLimit(nowMs);
+    advancePhysics(nowMs);
     drawJapaneseBackground();
     const isLight = document.body.classList.contains("light-theme");
     const wallColor = getCssVar("--wall-color", isLight ? "#d1d5db" : "#1a1a2e");
@@ -221,9 +287,9 @@ function gameLoop() {
         for (let f = b.getFixtureList(); f; f = f.getNext()) {
             const shape = f.getType();
             const bodyColor = isWallBody(b) ? wallNoteColor(b.soundType) || wallColor : b.renderColor || "#fff";
-            ctx.fillStyle = bodyColor;
-            ctx.strokeStyle = "#000";
-            ctx.lineWidth = 1.5;
+            ctx.fillStyle = b.isStatic() ? bodyColor : getObjectFill(f, bodyColor);
+            ctx.strokeStyle = b.isWall ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.24)";
+            ctx.lineWidth = b.isWall ? 1 : 1.25;
             if (bloomEnabled) {
                 ctx.shadowColor = bodyColor;
                 ctx.shadowBlur = 14;
@@ -416,6 +482,9 @@ function gameLoop() {
 }
 
 resizeCanvas();
+const savedLanguage = storageGet("symphony-language", "en");
+currentLanguage = TRANSLATIONS[savedLanguage] ? savedLanguage : "en";
+initStudioUI();
 migrateOldSingleSave();
 refreshSceneList();
 populateScaleSelect();
@@ -424,6 +493,7 @@ applyTheme(storageGet("symphony-theme", "dark") || "dark");
 updateUILanguage();
 autosaveStartInterval();
 restoreLastSessionIfAny();
+fitStudioCamera();
 
 buildWallPiano();
 initWallPanelDrag();
@@ -615,6 +685,10 @@ function _filterOptions(selected) {
     return _FILTERS.map((f) => `<option value="${f}" ${f === selected ? "selected" : ""}>${f}</option>`).join("");
 }
 
+function escapeHTML(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+}
+
 function _customListHTML() {
     const items = getStoredCustomTimbres();
     if (!items.length) return `<p class="cust-empty" data-i18n="cust-empty">${t("cust-empty")}</p>`;
@@ -622,7 +696,7 @@ function _customListHTML() {
         .map(
             (item) => `
             <div class="cust-row">
-                <span class="cust-row-name" title="${item.key}">${item.name}</span>
+                <span class="cust-row-name" title="${escapeHTML(item.key)}">${escapeHTML(item.name)}</span>
                 <span class="cust-row-btns">
                     <button class="sub-btn" onclick="selectCustomTimbre('${item.key}')" data-i18n="cust-use">✔ Use</button>
                     <button class="sub-btn cust-del" onclick="deleteCustomTimbreFromList('${item.key}')" data-i18n="cust-delete" title="${t("cust-delete")}">🗑️</button>
@@ -679,7 +753,7 @@ function buildCustomizerContent() {
         </div>
 
         <div class="tool-group" style="margin-top: 8px">
-            <input type="text" id="cust-name-input" class="scene-select" style="margin: 0" placeholder="${t("cust-name-placeholder")}" value="${nameValue.replace(/"/g, "&quot;")}" oninput="_customizerName = this.value" maxlength="60" />
+            <input type="text" id="cust-name-input" class="scene-select" style="margin: 0" placeholder="${t("cust-name-placeholder")}" value="${escapeHTML(nameValue)}" oninput="_customizerName = this.value" maxlength="60" />
             <button class="action-btn" style="padding: 8px" onclick="saveCustomTimbreFromPanel()" data-i18n="cust-save">💾 Save Timbre</button>
             <span id="cust-message" class="cust-message"></span>
         </div>
@@ -765,7 +839,13 @@ function saveCustomTimbreFromPanel() {
         return;
     }
     const key = saveCustomTimbre(name, _customizerDef);
-    if (!key) return;
+    if (!key) {
+        if (msg) {
+            msg.textContent = t("timbre-storage-failed");
+            msg.className = "cust-message warn";
+        }
+        return;
+    }
     // Il salvataggio "impegna" le modifiche: i timbri di partenza tornano originali
     // (il custom appena creato conserva già i valori modulati).
     _restoreCustomizerSnapshots();

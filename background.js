@@ -172,7 +172,13 @@ function invalidateBgVarCache() {
     _bgVarCacheKey = null;
 }
 
+let _backgroundFrameMs = null;
+const _backgroundMotionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
 function drawJapaneseBackground() {
+    const now = performance.now();
+    const reducedMotion = _backgroundMotionPreference.matches;
+    const frameScale = reducedMotion ? 0 : (_backgroundFrameMs === null ? 1 : Math.min(3, Math.max(0, (now - _backgroundFrameMs) / (1000 / 60))));
+    _backgroundFrameMs = now;
     const bg = getBgVars();
     bgCtx.clearRect(0, 0, logicalWidth, logicalHeight);
 
@@ -245,10 +251,12 @@ function drawJapaneseBackground() {
     drawPagoda(w * 0.72, h * 0.57);
     drawPagoda(w * 0.38, h * 0.61);
 
-    const time = Date.now() * 0.003;
-    updateWindGust(Date.now());
-    const effectiveWind = windSpeed + windGustValue * windTurbulence;
+    const time = reducedMotion ? 0 : Date.now() * 0.003;
+    if (!reducedMotion) updateWindGust(Date.now());
+    const effectiveWind = reducedMotion ? 0 : windSpeed + windGustValue * windTurbulence;
 
+    bgCtx.save();
+    bgCtx.globalAlpha = 0.65;
     backgroundTrees.forEach((t) => {
         const n = t.branchCount;
         const gw = effectiveWind * 0.1;
@@ -301,6 +309,8 @@ function drawJapaneseBackground() {
         }
         if (pathStarted) bgCtx.stroke();
 
+        bgCtx.save();
+        bgCtx.globalAlpha = 0.4;
         bgCtx.fillStyle = bg.blossom;
         bgCtx.beginPath();
         const dotR = Math.max(2.5, 5 * t.scale);
@@ -312,13 +322,17 @@ function drawJapaneseBackground() {
             bgCtx.arc(t.pX2[i] + dotR * 0.4, t.pY2[i] - dotR * 0.4, dotR * 0.7, 0, Math.PI * 2);
         }
         bgCtx.fill();
+        bgCtx.restore();
     });
 
+    bgCtx.restore();
+    bgCtx.save();
+    bgCtx.globalAlpha = 0.45;
     bgCtx.fillStyle = bg.leaf;
     fallingLeaves.forEach((leaf) => {
-        leaf.x += effectiveWind * 1.5 + Math.sin(leaf.angle) * 0.8;
-        leaf.y += leaf.speedY + Math.abs(effectiveWind) * 0.1;
-        leaf.angle += leaf.spin;
+        leaf.x += (effectiveWind * 1.5 + Math.sin(leaf.angle) * 0.8) * frameScale;
+        leaf.y += (leaf.speedY + Math.abs(effectiveWind) * 0.1) * frameScale;
+        leaf.angle += leaf.spin * frameScale;
 
         if (leaf.x > w + 20) leaf.x = -20;
         if (leaf.x < -20) leaf.x = w + 20;
@@ -335,5 +349,6 @@ function drawJapaneseBackground() {
         bgCtx.fill();
         bgCtx.restore();
     });
+    bgCtx.restore();
 }
 

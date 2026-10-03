@@ -1,0 +1,4 @@
+backup/
+.github-publish/
+node_modules/
+*.log

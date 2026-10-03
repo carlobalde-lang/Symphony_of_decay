@@ -2,6 +2,11 @@
 
 const TRANSLATIONS = {
     en: {
+        "studio-pan": "Move camera",
+        "studio-stop-sounds": "Stop all sounds",
+        "studio-audio-load": "Audio voices",
+        "studio-audio-overload": "Some impacts skipped",
+        "inst-pan": "Drag to move the camera.",
         harmony: "Harmony",
         objects: "Objects",
         language: "Language:",
@@ -178,6 +183,11 @@ const TRANSLATIONS = {
         "btn-close-help": "✕ Close"
     },
     it: {
+        "studio-pan": "Sposta camera",
+        "studio-stop-sounds": "Ferma tutti i suoni",
+        "studio-audio-load": "Voci audio",
+        "studio-audio-overload": "Alcuni impatti ignorati",
+        "inst-pan": "Trascina per spostare la camera.",
         harmony: "Armonia",
         objects: "Oggetti",
         language: "Lingua:",
@@ -355,6 +365,101 @@ const TRANSLATIONS = {
     }
 };
 
+Object.assign(TRANSLATIONS.en, {
+    "scene-default": "Scene",
+    "scene-name": "Scene name:",
+    "scene-invalid-name": "Invalid name",
+    "scene-overwrite": "A scene named \"{name}\" already exists. Overwrite it?",
+    "scene-saved": "💾 \"{name}\" saved ({count} objects)",
+    "scene-save-failed": "⚠️ Save failed: storage unavailable or full",
+    "scene-no-selection": "No scene selected",
+    "scene-not-found": "Scene not found",
+    "scene-loaded": "📂 \"{name}\" loaded ({count} objects)",
+    "scene-load-failed": "⚠️ Load failed: incompatible save",
+    "scene-delete-confirm": "Delete scene \"{name}\"?",
+    "scene-deleted": "🗑️ \"{name}\" deleted",
+    "scene-delete-failed": "⚠️ Delete failed: storage unavailable",
+    "scene-list-entry": "{name} ({count} objects)",
+    "session-restored": "🔄 Last session restored",
+    "session-restore-failed": "⚠️ Could not restore last session",
+    "autosave-failed": "⚠️ Automatic save failed: storage unavailable or full",
+    "history-failed": "⚠️ Could not restore this action",
+    "timbre-storage-failed": "⚠️ Could not save changes: storage unavailable or full",
+    "shortcuts-camera": "🖱️ Wheel: zoom • Middle-drag: pan",
+    "shortcuts-edit": "🖱️ Wheel: angle • Drag handle • Middle-drag: pan",
+    "shortcuts-select": "R: rotate 15° • Shift+R: -15° • Del: delete • Esc: deselect • Ctrl+C: copy • Ctrl+V: paste • Ctrl+M: mirror • Wheel: zoom • Middle-drag: pan"
+});
+Object.assign(TRANSLATIONS.it, {
+    "scene-default": "Scena",
+    "scene-name": "Nome della scena:",
+    "scene-invalid-name": "Nome non valido",
+    "scene-overwrite": "Esiste già una scena chiamata \"{name}\". Sovrascriverla?",
+    "scene-saved": "💾 \"{name}\" salvata ({count} oggetti)",
+    "scene-save-failed": "⚠️ Salvataggio fallito: memoria non disponibile o piena",
+    "scene-no-selection": "Nessuna scena selezionata",
+    "scene-not-found": "Scena non trovata",
+    "scene-loaded": "📂 \"{name}\" caricata ({count} oggetti)",
+    "scene-load-failed": "⚠️ Caricamento fallito: salvataggio incompatibile",
+    "scene-delete-confirm": "Eliminare la scena \"{name}\"?",
+    "scene-deleted": "🗑️ \"{name}\" eliminata",
+    "scene-delete-failed": "⚠️ Eliminazione fallita: memoria non disponibile",
+    "scene-list-entry": "{name} ({count} oggetti)",
+    "session-restored": "🔄 Ultima sessione ripristinata",
+    "session-restore-failed": "⚠️ Impossibile ripristinare l’ultima sessione",
+    "autosave-failed": "⚠️ Salvataggio automatico fallito: memoria non disponibile o piena",
+    "history-failed": "⚠️ Impossibile ripristinare questa azione",
+    "timbre-storage-failed": "⚠️ Modifiche non salvate: memoria non disponibile o piena",
+    "shortcuts-camera": "🖱️ Rotella: zoom • Trascina col tasto centrale: sposta visuale",
+    "shortcuts-edit": "🖱️ Rotella: angolo • Trascina maniglia • Tasto centrale: sposta visuale",
+    "shortcuts-select": "R: ruota 15° • Shift+R: -15° • Canc: elimina • Esc: deseleziona • Ctrl+C: copia • Ctrl+V: incolla • Ctrl+M: specchia • Rotella: zoom • Tasto centrale: sposta visuale"
+});
+
+Object.assign(TRANSLATIONS.en, {
+    "studio-kicker": "PHYSICS · SOUND · PLAY",
+    "studio-subtitle": "A playground for sound.",
+    "studio-live": "Live",
+    "studio-paused": "Paused",
+    "studio-tools": "☷ Tools",
+    "studio-workbench": "WORKBENCH",
+    "studio-tools-title": "Make some noise.",
+    "studio-close-tools": "Close tools",
+    "studio-tab-create": "Create",
+    "studio-tab-sound": "Sound",
+    "studio-tab-world": "World",
+    "studio-tab-scenes": "Scenes",
+    "studio-scenes-hint": "Keep a composition and return to it later.",
+    "studio-empty-kicker": "YOUR NEXT SOUND STARTS HERE",
+    "studio-empty-title": "Let physics compose.",
+    "studio-empty-hint": "Choose a shape, then click anywhere to begin.",
+    "studio-emitter": "Emitter",
+    "studio-select": "Select",
+    "studio-erase": "Erase"
+});
+Object.assign(TRANSLATIONS.it, {
+    "studio-kicker": "FISICA · SUONO · GIOCO",
+    "studio-subtitle": "Uno spazio per creare suoni.",
+    "studio-live": "In scena",
+    "studio-paused": "In pausa",
+    "studio-tools": "☷ Strumenti",
+    "studio-workbench": "IL TUO STUDIO",
+    "studio-tools-title": "Dai forma al suono.",
+    "studio-close-tools": "Chiudi strumenti",
+    "studio-tab-create": "Crea",
+    "studio-tab-sound": "Suono",
+    "studio-tab-world": "Mondo",
+    "studio-tab-scenes": "Scene",
+    "studio-scenes-hint": "Salva una composizione e ritrovala quando vuoi.",
+    "studio-empty-kicker": "IL PROSSIMO SUONO PARTE DA QUI",
+    "studio-empty-title": "Lascia comporre la fisica.",
+    "studio-empty-hint": "Scegli una forma, poi clicca nella scena per iniziare.",
+    "studio-emitter": "Emettitore",
+    "studio-select": "Seleziona",
+    "studio-erase": "Elimina"
+});
+
+Object.assign(TRANSLATIONS.en, { "studio-fit-view": "Fit the scene in view" });
+Object.assign(TRANSLATIONS.it, { "studio-fit-view": "Inquadra tutta la scena" });
+
 let currentLanguage = "en";
 
 function t(key, replacements = {}) {
@@ -395,6 +500,7 @@ function updateInstructionText() {
     const shortcutEl = document.getElementById("instruction-shortcuts");
     syncEmitterPanel();
     syncWallPanel();
+    if (typeof syncStudioControls === "function") syncStudioControls();
     if (!el) return;
     const setShortcuts = (text) => {
         if (shortcutEl) shortcutEl.innerText = text || "";
@@ -406,12 +512,15 @@ function updateInstructionText() {
     }
     if (editingWallBody) {
         el.innerText = editingWallBody.isEmitter ? t("inst-emitter-edit") : t("inst-wall-edit");
-        setShortcuts("🖱️ Wheel: angle • 🎯 drag handle • Middle-drag: pan • Wheel: zoom");
+        setShortcuts(t("shortcuts-edit"));
         return;
     }
     if (currentMode === "none") {
         el.innerText = t("inst-free");
-        setShortcuts("🖱️ Wheel: zoom • Middle-drag: pan");
+        setShortcuts(t("shortcuts-camera"));
+    } else if (currentMode === "pan") {
+        el.innerText = t("inst-pan");
+        setShortcuts(t("shortcuts-camera"));
     } else if (currentMode === "spawn") {
         if (currentChoice === "wall") {
             el.innerText = t("inst-wall");
@@ -420,28 +529,29 @@ function updateInstructionText() {
         } else {
             el.innerText = t("inst-default");
         }
-        setShortcuts("🖱️ Wheel: zoom • Middle-drag: pan");
+        setShortcuts(t("shortcuts-camera"));
     } else if (currentMode === "bar") {
         el.innerText = t("inst-bar");
-        setShortcuts("🖱️ Wheel: zoom • Middle-drag: pan");
+        setShortcuts(t("shortcuts-camera"));
     } else if (currentMode === "rope") {
         el.innerText = t("inst-rope");
-        setShortcuts("🖱️ Wheel: zoom • Middle-drag: pan");
+        setShortcuts(t("shortcuts-camera"));
     } else if (currentMode === "chain") {
         el.innerText = t("inst-chain");
-        setShortcuts("🖱️ Wheel: zoom • Middle-drag: pan");
+        setShortcuts(t("shortcuts-camera"));
     } else if (currentMode === "eraser") {
         el.innerText = t("inst-eraser");
-        setShortcuts("🖱️ Wheel: zoom • Middle-drag: pan");
+        setShortcuts(t("shortcuts-camera"));
     } else if (currentMode === "select") {
         el.innerText = t("inst-select");
-        setShortcuts("R: rot 15° • Shift+R: -15° • Del: elimina • Esc: deseleziona • Ctrl+C: copia • Ctrl+V: incolla • Ctrl+M: specchia • 🖱️ Wheel: zoom • Middle-drag: pan");
+        setShortcuts(t("shortcuts-select"));
     }
 }
 
 function setLanguage(lang) {
     if (TRANSLATIONS[lang]) {
         currentLanguage = lang;
+        storageSet("symphony-language", lang);
         populateScaleSelect();
         populateTimbreSelect();
         if (currentEmitterPanelBody) {

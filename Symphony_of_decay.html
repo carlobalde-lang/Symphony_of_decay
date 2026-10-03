@@ -5,55 +5,53 @@
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
         <title>Symphony of Decay: Planck Edition</title>
         <link rel="stylesheet" href="style.css" />
-        <script src="https://cdn.jsdelivr.net/npm/planck-js/dist/planck.min.js"></script>
+        <link rel="stylesheet" href="studio.css" />
+        <script src="vendor/planck-1.3.0.min.js"></script>
     </head>
     <body>
         <canvas id="bg-canvas"></canvas>
         <canvas id="game-canvas"></canvas>
 
-        <button id="toolbox-toggle" onclick="toggleToolbox(event)">⚙️ Menu</button>
+        <button id="toolbox-toggle" onclick="toggleToolbox(event)" data-canvas-overlay data-i18n="studio-tools">☷ Tools</button>
 
-        <div id="top-center-controls">
+        <div id="top-center-controls" data-canvas-overlay aria-label="Playback and editing">
             <button class="sub-btn" id="btn-undo" onclick="undoAction()" data-i18n="btn-undo">↩️ Undo</button>
             <button class="sub-btn" id="btn-redo" onclick="redoAction()" data-i18n="btn-redo">↪️ Redo</button>
             <button class="sub-btn" id="btn-help" onclick="openHelp()" data-i18n="btn-help">❓ Help</button>
         </div>
 
-        <div id="ui">
-            <h1>Symphony of Decay</h1>
+        <header id="ui" data-canvas-overlay>
+            <div class="studio-wordmark"><span class="studio-mark" aria-hidden="true">◈</span><div><span class="studio-kicker" data-i18n="studio-kicker">PHYSICS · SOUND · PLAY</span><h1>Symphony <em>of Decay</em></h1></div></div>
+            <div class="studio-meta"><span id="studio-state" class="studio-state">Live</span><span data-i18n="studio-subtitle">A playground for sound.</span></div>
+        </header>
+        <div id="studio-status" data-canvas-overlay>
+            <div class="studio-stats"><div id="score-box"><span data-i18n="harmony">Harmony</span><strong id="score">0</strong></div><div id="body-count-box"><span data-i18n="objects">Objects</span><strong><span id="body-count">0</span><span class="studio-stat-divider"> / <span id="body-count-max">150</span></span></strong></div></div>
+            <div id="object-meter" role="meter" aria-label="Object capacity" aria-valuemin="0" aria-valuenow="0" aria-valuemax="150"><span></span></div>
             <p id="instruction-mode" data-i18n="inst-default">Drag to move. Click on empty space to spawn.</p>
             <p id="instruction-shortcuts" style="font-size: 11px; opacity: 0.75; margin: 2px 0 0 0"></p>
-            <div id="score-box">
-                <span data-i18n="harmony">Harmony</span>: <span id="score" style="color: #2ed573">0</span>
-            </div>
-            <div id="body-count-box">
-                <span data-i18n="objects">Objects</span>: <span id="body-count">0</span> /
-                <span id="body-count-max">150</span>
-            </div>
-            <div id="dynamic-limit-box" style="pointer-events: auto; margin-top: 4px; display: flex; align-items: center; gap: 6px">
-                <input
-                    type="checkbox"
-                    id="chk-dynamic-limit"
-                    checked
-                    onchange="setDynamicLimitEnabled(this.checked)"
-                    data-i18n-title="dynamic-limit-hint" />
-                <label
-                    for="chk-dynamic-limit"
-                    style="font-size: 11px; margin: 0; cursor: pointer"
-                    data-i18n="dynamic-limit-label"
-                    data-i18n-title="dynamic-limit-hint"
-                    >☑️ Adaptive Performance Limit</label
-                >
-            </div>
-            <p
-                id="dynamic-limit-hint"
-                data-i18n="dynamic-limit-hint"
-                style="pointer-events: none; font-size: 10px; opacity: 0.65; font-style: italic; margin: 2px 0 0 0">
-                Automatically lowers the object limit when performance drops, and raises it again when there's room.
-            </p>
         </div>
-
-        <div id="toolbox" class="collapsed">
+        <div id="studio-empty" aria-hidden="true"><div class="empty-orbits"><span>♪</span></div><p class="studio-kicker" data-i18n="studio-empty-kicker">YOUR NEXT SOUND STARTS HERE</p><h2 data-i18n="studio-empty-title">Let physics compose.</h2><p data-i18n="studio-empty-hint">Choose a shape, then click anywhere to begin.</p></div>
+        <nav id="studio-dock" data-canvas-overlay aria-label="Quick tools">
+            <button class="quick-tool" data-quick-block="bass" onclick="selectBlock('bass')" aria-pressed="true" title="Orolite"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="6" y="6" width="20" height="20" rx="4"/></svg><span>Orolite</span></button>
+            <button class="quick-tool" data-quick-block="wood" onclick="selectBlock('wood')" aria-pressed="false" title="Pentacore"><svg viewBox="0 0 32 32" aria-hidden="true"><polygon points="16.0,5.0 26.5,12.6 22.5,24.9 9.5,24.9 5.5,12.6"/></svg><span>Pentacore</span></button>
+            <button class="quick-tool" data-quick-block="mid" onclick="selectBlock('mid')" aria-pressed="false" title="Hexarun"><svg viewBox="0 0 32 32" aria-hidden="true"><polygon points="16.0,5.0 25.5,10.5 25.5,21.5 16.0,27.0 6.5,21.5 6.5,10.5"/></svg><span>Hexarun</span></button>
+            <button class="quick-tool" data-quick-block="rubber" onclick="selectBlock('rubber')" aria-pressed="false" title="Septifor"><svg viewBox="0 0 32 32" aria-hidden="true"><polygon points="16.0,5.0 24.6,9.1 26.7,18.4 20.8,25.9 11.2,25.9 5.3,18.4 7.4,9.1"/></svg><span>Septifor</span></button>
+            <button class="quick-tool" data-quick-block="high" onclick="selectBlock('high')" aria-pressed="false" title="Octavox"><svg viewBox="0 0 32 32" aria-hidden="true"><polygon points="16.0,5.0 23.8,8.2 27.0,16.0 23.8,23.8 16.0,27.0 8.2,23.8 5.0,16.0 8.2,8.2"/></svg><span>Octavox</span></button>
+            <button class="quick-tool" data-quick-block="neon" onclick="selectBlock('neon')" aria-pressed="false" title="Astral"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="11"/></svg><span>Astral</span></button>
+            <span class="dock-divider" aria-hidden="true"></span>
+            <button class="quick-tool" data-quick-block="emitter" onclick="selectBlock('emitter')" data-i18n-title="block-emitter" aria-pressed="false"><span class="quick-icon" aria-hidden="true">↟</span><span data-i18n="studio-emitter">Emitter</span></button>
+            <button class="quick-tool" data-quick-mode="select" onclick="setMode('select')" aria-pressed="false"><span class="quick-icon" aria-hidden="true">⌖</span><span data-i18n="studio-select">Select</span></button>
+            <button id="btn-pan" class="quick-tool special-btn" data-quick-mode="pan" onclick="setMode('pan')" aria-pressed="false"><span class="quick-icon" aria-hidden="true">✥</span><span data-i18n="studio-pan">Move camera</span></button>
+            <button class="quick-tool" data-quick-mode="eraser" onclick="setMode('eraser')" aria-pressed="false"><span class="quick-icon" aria-hidden="true">⌫</span><span data-i18n="studio-erase">Erase</span></button>
+        </nav>
+        <aside id="toolbox" class="collapsed" data-canvas-overlay>
+            <div class="studio-toolbox-heading"><div><span class="studio-kicker" data-i18n="studio-workbench">WORKBENCH</span><h2 data-i18n="studio-tools-title">Make some noise.</h2></div><button class="studio-icon-button" onclick="toggleToolbox(event)" data-i18n-title="studio-close-tools" aria-label="Close tools">✕</button></div>
+            <div class="studio-tabs" role="tablist" aria-label="Tools">
+                <button id="studio-tab-create" role="tab" aria-selected="true" aria-controls="studio-panel-create" data-studio-tab="create" data-i18n="studio-tab-create">Create</button>
+                <button id="studio-tab-sound" role="tab" aria-selected="false" aria-controls="studio-panel-sound" data-studio-tab="sound" data-i18n="studio-tab-sound">Sound</button>
+                <button id="studio-tab-world" role="tab" aria-selected="false" aria-controls="studio-panel-world" data-studio-tab="world" data-i18n="studio-tab-world">World</button>
+                <button id="studio-tab-scenes" role="tab" aria-selected="false" aria-controls="studio-panel-scenes" data-studio-tab="scenes" data-i18n="studio-tab-scenes">Scenes</button>
+            </div>
             <div class="menu-controls">
                 <button class="action-btn" onclick="clearSceneAction()" data-i18n="btn-clear">🧹 Clear All</button>
                 <button class="action-btn" id="btn-pause-play" onclick="togglePause()" data-i18n="btn-pause">
@@ -173,7 +171,7 @@
                             id="slider-gravity"
                             min="0"
                             max="25"
-                            step="0.5"
+                            step="0.1"
                             value="9.8"
                             oninput="updatePhysics()" />
                     </div>
@@ -538,7 +536,7 @@
                 <summary data-i18n="accordion-graphics">🎨 Graphics</summary>
                 <div class="accordion-body">
                     <div class="tool-group">
-                        <label style="margin: 0" data-i18n="select-object">Select Object</label>
+
                         <label style="margin: 6px 0 2px 0" data-i18n="theme-label">Theme:</label>
                         <select id="theme-select" class="scene-select" onchange="setTheme(this.value)">
                             <option value="dark" data-i18n="theme-dark">🌑 Dark</option>
@@ -563,7 +561,7 @@
                 </div>
             </details>
 
-            <div class="tool-group" style="margin-top: 4px">
+            <section id="studio-panel-scenes" data-studio-panel="scenes" role="tabpanel" aria-labelledby="studio-tab-scenes" hidden><p class="studio-panel-hint" data-i18n="studio-scenes-hint">Keep a composition and return to it later.</p><div class="tool-group" style="margin-top: 4px">
                 <label data-i18n="saved-scenes">Saved Scenes:</label>
                 <select id="scene-select" class="scene-select"></select>
                 <div class="menu-controls">
@@ -578,6 +576,29 @@
                     🗑️ Delete Selected
                 </button>
             </div>
+
+            </section>
+            <footer class="studio-settings">            <div id="dynamic-limit-box" style="pointer-events: auto; margin-top: 4px; display: flex; align-items: center; gap: 6px">
+                <input
+                    type="checkbox"
+                    id="chk-dynamic-limit"
+                    checked
+                    onchange="setDynamicLimitEnabled(this.checked)"
+                    data-i18n-title="dynamic-limit-hint" />
+                <label
+                    for="chk-dynamic-limit"
+                    style="font-size: 11px; margin: 0; cursor: pointer"
+                    data-i18n="dynamic-limit-label"
+                    data-i18n-title="dynamic-limit-hint"
+                    >☑️ Adaptive Performance Limit</label
+                >
+            </div>
+            <p
+                id="dynamic-limit-hint"
+                data-i18n="dynamic-limit-hint"
+                style="pointer-events: none; font-size: 10px; opacity: 0.65; font-style: italic; margin: 2px 0 0 0">
+                Automatically lowers the object limit when performance drops, and raises it again when there's room.
+            </p>
 
             <!-- Language Selector Flags -->
             <div
@@ -594,21 +615,22 @@
                 <div>
                     <button
                         class="sub-btn"
-                        onclick="setLanguage('en')"
+                        onclick="setLanguage('en')" aria-label="English"
                         style="padding: 4px 8px; font-size: 16px; cursor: pointer">
                         🇬🇧
                     </button>
                     <button
                         class="sub-btn"
-                        onclick="setLanguage('it')"
+                        onclick="setLanguage('it')" aria-label="Italiano"
                         style="padding: 4px 8px; font-size: 16px; cursor: pointer">
                         🇮🇹
                     </button>
                 </div>
             </div>
-        </div>
+            </footer>
+        </aside>
 
-        <div id="emitter-panel" style="display: none">
+        <div id="emitter-panel" style="display: none" data-canvas-overlay>
             <div class="emitter-panel-header">
                 <span data-i18n="emitter-panel-title">🎯 Emitter Settings</span>
                 <button class="sub-btn" onclick="closeEmitterPanel()" data-i18n="emitter-panel-close">✕ Close</button>
@@ -645,6 +667,8 @@
                         <option value="afro-latin">Afro Latin</option>
                         <option value="melody-asc">Melody Ascending</option>
                         <option value="arpeggio-16">Arpeggio 16</option>
+                        <option value="ambient-16">Ambient 16</option>
+                        <option value="syncopated-16">Syncopated 16</option>
                         <option value="random-16">Random 16</option>
                     </select>
                 </div>
@@ -758,7 +782,7 @@
             </div>
         </div>
 
-        <div id="wall-panel" style="display: none">
+        <div id="wall-panel" style="display: none" data-canvas-overlay>
             <div class="wall-panel-header">
                 <span data-i18n="wall-panel-title">🧱 Wall Sound</span>
                 <button class="sub-btn" onclick="closeWallPanel()" data-i18n="wall-panel-close">✕ Close</button>
@@ -806,6 +830,7 @@
         <script src="objects.js"></script>
         <script src="scenes.js"></script>
         <script src="background.js"></script>
+        <script src="studio-ui.js"></script>
         <script src="main.js"></script>
     </body>
 </html>
